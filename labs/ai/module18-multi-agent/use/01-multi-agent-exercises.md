@@ -1,601 +1,832 @@
 # Use 01: Multi-Agent Exercises
 
-Practice building and coordinating multiple AI agents.
+Module 18 - Multi-Agent Systems
+Audience: DBAs with no Python background
+Prerequisite: Module 17 (single-agent basics), Python3 installed on Mac
 
 ---
 
-## Exercise 1. Two-agent pipeline
+## How to read this guide
 
-On your **Mac terminal**, run:
+Every Python line is explained. Where a DBA analogy helps, it is used. All scripts run
+as standalone heredoc blocks - paste the entire block into your terminal and press Enter.
+
+---
+
+## Exercise 1: Build a Two-Agent Pipeline (Monitor -> Classifier)
+
+### What you are building
+
+A pipeline where Agent 1 (Monitor) reads a database metric and passes its finding to
+Agent 2 (Classifier), which decides the severity. This is the same pattern as a
+`pg_stat_activity` query feeding an alert rule - one process produces data, another
+process consumes it.
+
+### Concepts
+
+- Agent: a function that takes input, calls an LLM, returns output
+- Pipeline: the output of one agent becomes the input of the next
+- DBA analogy: `pg_stat_activity` -> alert rule -> `notify_table`
+
+### Code
+
+On your **Mac terminal**, paste this entire block and press Enter:
 
 ```bash
 python3 << 'PYEOF'
 
-# ============================================================
-# Exercise: Build a simple two-agent pipeline.
-# Monitor agent detects the alert, Classifier agent categorizes it.
-#
-# DBA analogy: monitoring tool fires, then routing rules classify.
-# ============================================================
+# import the openai library so Python can talk to the OpenAI API
+# Think of this like loading the pg_stat extension - it gives you new capabilities
+import openai
 
-print("Exercise 1: Two-Agent Pipeline")
-print("=" * 50)
+# import os so we can read environment variables (where your API key lives)
+import os
 
-class MonitorAgent:
-    """Detect alert conditions from raw metrics."""
-    def __init__(self):
-        self.name = "monitor"
-        self.thresholds = {
-            "cpu_percent": 85,
-            "disk_percent": 85,
-            "replication_lag_seconds": 30,
-            "connections": 400,
+# -----------------------------------------------------------------------
+# SETUP
+# -----------------------------------------------------------------------
+
+# Create a client object that holds your API credentials
+# This is like opening a psql connection - you do it once and reuse it
+client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+# -----------------------------------------------------------------------
+# AGENT 1: MONITOR AGENT
+# -----------------------------------------------------------------------
+# This agent receives a raw metric string and returns a plain-English analysis.
+# Think of it as a stored procedure that reads pg_stat and returns a summary row.
+
+def monitor_agent(raw_metric: str) -> str:
+    # Build a list called "messages" - this is the conversation you send to the LLM
+    # It always starts with a "system" message (the agent's job description)
+    # and a "user" message (the actual input)
+    messages = [
+        {
+            "role": "system",
+            # This tells the LLM what role it is playing
+            "content": "You are a database monitor agent. Analyze the metric and report "
+                       "what you observe. Be brief - two sentences maximum."
+        },
+        {
+            "role": "user",
+            # This is the actual data being passed in - like a parameter to a function
+            "content": f"Metric reading: {raw_metric}"
         }
+    ]
 
-    def process(self, metrics):
-        alerts = []
-        for metric, value in metrics.items():
-            thresh = self.thresholds.get(metric)
-            if thresh and value >= thresh:
-                alerts.append({
-                    "metric": metric,
-                    "value": value,
-                    "threshold": thresh,
-                    "severity": "critical" if value >= thresh * 1.1 else "warning",
-                })
-        return {"alerts": alerts, "metric_count": len(metrics)}
+    # Call the OpenAI API with our messages
+    # model="gpt-4o-mini" is like choosing which query planner to use
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages
+    )
+
+    # Pull the text out of the response object
+    # .choices[0] = first result (like LIMIT 1)
+    # .message.content = the actual text the LLM returned
+    return response.choices[0].message.content
 
 
-class ClassifierAgent:
-    """Classify alerts by category."""
-    def __init__(self):
-        self.name = "classifier"
-        self.metric_to_category = {
-            "cpu_percent": "performance",
-            "disk_percent": "storage",
-            "replication_lag_seconds": "replication",
-            "connections": "connectivity",
+# -----------------------------------------------------------------------
+# AGENT 2: CLASSIFIER AGENT
+# -----------------------------------------------------------------------
+# This agent receives the monitor's analysis and assigns a severity level.
+# Think of it as a CASE WHEN block that converts a description into a code.
+
+def classifier_agent(monitor_output: str) -> str:
+    messages = [
+        {
+            "role": "system",
+            # Strict instructions - we want a single word back, not an essay
+            "content": "You are a severity classifier. Given a database observation, "
+                       "respond with exactly one word: CRITICAL, WARNING, or OK."
+        },
+        {
+            "role": "user",
+            "content": f"Observation: {monitor_output}"
         }
+    ]
 
-    def process(self, monitor_output):
-        classified = []
-        for alert in monitor_output["alerts"]:
-            category = self.metric_to_category.get(alert["metric"], "unknown")
-            classified.append({
-                **alert,
-                "category": category,
-            })
-        return {"classified_alerts": classified}
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages
+    )
+
+    # .strip() removes any leading/trailing whitespace - like TRIM() in SQL
+    return response.choices[0].message.content.strip()
 
 
-# Build and run the pipeline
-monitor = MonitorAgent()
-classifier = ClassifierAgent()
+# -----------------------------------------------------------------------
+# PIPELINE: WIRE THE TWO AGENTS TOGETHER
+# -----------------------------------------------------------------------
 
-test_metrics = [
-    {"cpu_percent": 95, "disk_percent": 42, "connections": 150},
-    {"disk_percent": 98, "cpu_percent": 30, "connections": 450},
-    {"replication_lag_seconds": 120, "cpu_percent": 45},
-]
+# This is the raw metric - in a real system this comes from pg_stat_activity
+# or a Prometheus scrape. For this exercise we hardcode it.
+raw_metric = "active_connections=198, max_connections=200, wait_events=ClientRead x 45"
 
-print("\nTwo-Agent Pipeline Results:")
-print("-" * 55)
+print("=== TWO-AGENT PIPELINE ===")
+print(f"Input metric : {raw_metric}")
 
-for metrics in test_metrics:
-    # Step 1: Monitor detects
-    detected = monitor.process(metrics)
+# Step 1: pass the raw metric to the monitor agent
+# This is like calling: SELECT monitor_fn(raw_metric)
+monitor_result = monitor_agent(raw_metric)
+print(f"\nMonitor agent output:\n{monitor_result}")
 
-    # Step 2: Classifier categorizes
-    classified = classifier.process(detected)
+# Step 2: pass the monitor's output to the classifier agent
+# The output of one agent becomes the input of the next - that is a pipeline
+# This is like: SELECT classify_fn(monitor_fn(raw_metric))
+severity = classifier_agent(monitor_result)
+print(f"\nClassifier agent output: {severity}")
 
-    print(f"\n  Input: {metrics}")
-    print(f"  Monitor found: {len(detected['alerts'])} alerts")
-    for alert in classified['classified_alerts']:
-        print(f"    [{alert['severity']:>8s}] {alert['category']}: "
-              f"{alert['metric']}={alert['value']}")
+print("\nPipeline complete.")
 
-print("""
-Pipeline: metrics -> MonitorAgent -> ClassifierAgent -> result
-Each agent has one job. Simple, testable, replaceable.
-""")
 PYEOF
+```
+
+### Expected output (yours will differ):
+
+```
+=== TWO-AGENT PIPELINE ===
+Input metric : active_connections=198, max_connections=200, wait_events=ClientRead x 45
+
+Monitor agent output:
+The database is nearly at connection capacity with 198 out of 200 connections in use.
+45 connections are in a ClientRead wait state, indicating the application is not
+releasing connections promptly.
+
+Classifier agent output: CRITICAL
+
+Pipeline complete.
 ```
 
 ---
 
-## Exercise 2. Agent communication audit trail
+## Exercise 2: Add Logging to Agent Communication (Audit Trail)
 
-On your **Mac terminal**, run:
+### What you are building
+
+Add a message log that records every input and output between agents. In database terms
+this is an audit trail - the same reason you keep a `pg_audit` log or write to a
+`dba_audit` table. When something goes wrong, you need to know exactly what each agent
+said to the other.
+
+### Concepts
+
+- Audit trail: a time-stamped record of every action in the system
+- Here we log to a Python list (in-memory) - in production you would INSERT into a table
+- The structure mirrors a CDC event log: who, what, when
+
+### Code
+
+On your **Mac terminal**, paste this entire block and press Enter:
 
 ```bash
 python3 << 'PYEOF'
+
+import openai
+import os
+
+# datetime gives us timestamps - like PostgreSQL's NOW()
 from datetime import datetime
 
-# ============================================================
-# Exercise: Add logging to agent communication.
-# Every message between agents is recorded for audit.
-#
-# DBA analogy: like pgaudit - log every action for review.
-# ============================================================
+client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-print("Exercise 2: Agent Communication Audit Trail")
-print("=" * 55)
-
-class AuditedMessageBus:
-    """
-    Message bus with full audit logging.
-
-    DBA analogy: like pgaudit for inter-agent communication.
-    Every message is logged with timestamp, sender, receiver,
-    and content. You can replay the entire conversation later.
-    """
-
-    def __init__(self):
-        self.log = []                    # audit trail
-        self.handlers = {}               # agent_name -> handler function
-
-    def register(self, agent_name, handler):
-        self.handlers[agent_name] = handler
-
-    def send(self, sender, receiver, msg_type, content):
-        """Send and log a message."""
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "sender": sender,
-            "receiver": receiver,
-            "msg_type": msg_type,
-            "content_summary": str(content)[:80],
-            "delivered": False,
-        }
-
-        # Deliver
-        if receiver in self.handlers:
-            self.handlers[receiver](content)
-            entry["delivered"] = True
-        else:
-            entry["error"] = f"No handler for '{receiver}'"
-
-        self.log.append(entry)
-        return entry
-
-    def print_audit_trail(self):
-        """Print the full audit trail."""
-        print(f"\n  Audit Trail ({len(self.log)} messages):")
-        print("  " + "-" * 55)
-        for i, entry in enumerate(self.log):
-            status = "OK" if entry["delivered"] else "FAILED"
-            ts = entry["timestamp"][-12:-4]  # just the time
-            print(f"  {i+1}. [{ts}] {entry['sender']:>12s} -> {entry['receiver']:<12s} "
-                  f"[{entry['msg_type']:>10s}] {status}")
+# -----------------------------------------------------------------------
+# AUDIT LOG
+# -----------------------------------------------------------------------
+# This is a plain Python list. Each item will be a dict (key-value pairs).
+# Think of the list as a table and each dict as a row.
+# Columns: agent_name (VARCHAR), direction (VARCHAR), content (TEXT), logged_at (TIMESTAMP)
+audit_log = []
 
 
-# Test
-bus = AuditedMessageBus()
+def log_message(agent_name: str, direction: str, content: str):
+    # Create one log row as a Python dict
+    # direction is either "INPUT" or "OUTPUT" - like knowing if a value was read or written
+    entry = {
+        "agent_name": agent_name,
+        "direction":  direction,
+        "content":    content,
+        # datetime.now().isoformat() produces a string like "2026-06-09T14:23:01.123456"
+        # Same as PostgreSQL's NOW()::text
+        "logged_at":  datetime.now().isoformat()
+    }
+    # Append the row to our in-memory table
+    audit_log.append(entry)
 
-# Register handlers
-received = {"classifier": [], "diagnostics": [], "remediation": []}
 
-for agent_name in received:
-    name = agent_name  # capture in closure
-    bus.register(name, lambda content, n=name: received[n].append(content))
+# -----------------------------------------------------------------------
+# AGENT 1: MONITOR AGENT (with logging)
+# -----------------------------------------------------------------------
 
-# Simulate a workflow
-bus.send("monitor", "classifier", "new_alert", {"text": "CPU at 95%", "cpu": 95})
-bus.send("classifier", "diagnostics", "classified", {"category": "performance", "confidence": 0.9})
-bus.send("diagnostics", "remediation", "diagnosis", {"cause": "Long query", "pid": 12345})
-bus.send("remediation", "missing_agent", "action", {"do": "kill query"})  # will fail
+def monitor_agent(raw_metric: str) -> str:
+    # Log what came IN to this agent before we do anything
+    log_message("MonitorAgent", "INPUT", raw_metric)
 
-bus.print_audit_trail()
+    messages = [
+        {"role": "system", "content": "You are a database monitor agent. Analyze the "
+                                      "metric and report what you observe. Two sentences maximum."},
+        {"role": "user",   "content": f"Metric reading: {raw_metric}"}
+    ]
 
-# Check delivery
-for agent, msgs in received.items():
-    print(f"  {agent} received: {len(msgs)} messages")
+    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+    result = response.choices[0].message.content
 
-print("""
-Audit trail is essential for:
-  1. Debugging: why did the AI take that action?
-  2. Compliance: prove what happened and when
-  3. Learning: review conversations to improve agents
-""")
+    # Log what went OUT of this agent after we get the LLM response
+    log_message("MonitorAgent", "OUTPUT", result)
+
+    return result
+
+
+# -----------------------------------------------------------------------
+# AGENT 2: CLASSIFIER AGENT (with logging)
+# -----------------------------------------------------------------------
+
+def classifier_agent(monitor_output: str) -> str:
+    log_message("ClassifierAgent", "INPUT", monitor_output)
+
+    messages = [
+        {"role": "system", "content": "You are a severity classifier. Respond with "
+                                      "exactly one word: CRITICAL, WARNING, or OK."},
+        {"role": "user",   "content": f"Observation: {monitor_output}"}
+    ]
+
+    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+    result = response.choices[0].message.content.strip()
+
+    log_message("ClassifierAgent", "OUTPUT", result)
+
+    return result
+
+
+# -----------------------------------------------------------------------
+# RUN THE PIPELINE
+# -----------------------------------------------------------------------
+
+raw_metric = "replication_lag_seconds=320, replica_status=streaming, wal_sender_state=catchup"
+
+monitor_result = monitor_agent(raw_metric)
+severity       = classifier_agent(monitor_result)
+
+print(f"Final severity: {severity}")
+
+# -----------------------------------------------------------------------
+# PRINT THE AUDIT LOG
+# -----------------------------------------------------------------------
+# Loop over every entry in our list and print it
+# This is like: SELECT * FROM dba_audit ORDER BY logged_at
+print("\n=== AUDIT TRAIL ===")
+
+# "for entry in audit_log" iterates row by row - like a cursor in PL/pgSQL
+for entry in audit_log:
+    # f-strings insert variable values into a string - like format() in SQL
+    # [:80] truncates to 80 characters so the output stays readable
+    print(f"[{entry['logged_at']}] {entry['agent_name']} {entry['direction']}: "
+          f"{entry['content'][:80]}...")
+
 PYEOF
+```
+
+### Expected output (yours will differ):
+
+```
+Final severity: WARNING
+
+=== AUDIT TRAIL ===
+[2026-06-09T14:23:01.001234] MonitorAgent INPUT: replication_lag_seconds=320, replica_status=streaming, wal_sender_state=c...
+[2026-06-09T14:23:01.882341] MonitorAgent OUTPUT: Replication lag is at 320 seconds, indicating the replica is significan...
+[2026-06-09T14:23:02.441233] ClassifierAgent INPUT: Replication lag is at 320 seconds, indicating the replica is signific...
+[2026-06-09T14:23:02.991122] ClassifierAgent OUTPUT: WARNING...
 ```
 
 ---
 
-## Exercise 3. Agent voting system
+## Exercise 3: Agent Voting System (3 Agents Vote, Majority Wins)
 
-On your **Mac terminal**, run:
+### What you are building
+
+Three independent classifier agents each analyze the same metric and return a severity
+vote. The majority vote wins. This is like running the same query on three read replicas
+and taking the result that appears most often - it reduces the chance that one confused
+LLM response becomes your final answer.
+
+### Concepts
+
+- Quorum: a majority agreement - the same concept behind Patroni/etcd leader election
+- In databases, you need 2 of 3 nodes to agree before a failover is promoted
+- Here, 2 of 3 agents must agree on severity before it is accepted
+
+### Code
+
+On your **Mac terminal**, paste this entire block and press Enter:
 
 ```bash
 python3 << 'PYEOF'
+
+import openai
+import os
+
+# Counter counts how many times each value appears in a list
+# Think of it like: SELECT severity, COUNT(*) FROM votes GROUP BY severity ORDER BY COUNT(*) DESC LIMIT 1
 from collections import Counter
 
-# ============================================================
-# Exercise: Three agents vote on classification.
-# Majority wins. If no majority, escalate to human.
-#
-# DBA analogy: like quorum in a distributed database.
-# 3 nodes vote, majority decides. Prevents one bad node
-# from making the wrong decision.
-# ============================================================
+client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-print("Exercise 3: Agent Voting System")
-print("=" * 50)
+# -----------------------------------------------------------------------
+# SINGLE VOTER AGENT
+# -----------------------------------------------------------------------
+# Each voter gets the same input but is told it is one of three independent reviewers.
+# The agent_id parameter lets us label each voter in the output.
 
-class VotingClassifier:
-    """
-    Three classifiers vote on the category.
-    Majority wins. Ties go to "needs_review."
-
-    DBA analogy: like synchronous replication with 3 nodes.
-    A write is confirmed only when 2/3 nodes agree.
-    """
-
-    def __init__(self):
-        # Three classifiers with slightly different rules
-        self.classifiers = {
-            "keyword_agent": self._keyword_classify,
-            "metric_agent": self._metric_classify,
-            "hybrid_agent": self._hybrid_classify,
+def voter_agent(metric_description: str, agent_id: int) -> str:
+    messages = [
+        {
+            "role": "system",
+            # We tell the LLM it is one of multiple independent reviewers
+            # This encourages it to reason independently rather than hedge
+            "content": f"You are database severity reviewer #{agent_id} of 3. "
+                       "Classify independently. Respond with exactly one word: "
+                       "CRITICAL, WARNING, or OK."
+        },
+        {
+            "role": "user",
+            "content": f"Database observation: {metric_description}"
         }
+    ]
 
-    def _keyword_classify(self, text, metrics):
-        """Classify using text keywords only."""
-        t = text.lower()
-        if "cpu" in t or "slow" in t: return "performance"
-        if "disk" in t or "full" in t: return "storage"
-        if "replication" in t or "lag" in t: return "replication"
-        if "connection" in t or "timeout" in t: return "connectivity"
-        return "unknown"
+    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
 
-    def _metric_classify(self, text, metrics):
-        """Classify using metrics only."""
-        if metrics.get("cpu_percent", 0) > 85: return "performance"
-        if metrics.get("disk_percent", 0) > 85: return "storage"
-        if metrics.get("replication_lag_seconds", 0) > 30: return "replication"
-        if metrics.get("connections", 0) > 400: return "connectivity"
-        return "unknown"
+    # .strip() removes whitespace; .upper() normalizes case - like UPPER(TRIM(col)) in SQL
+    vote = response.choices[0].message.content.strip().upper()
 
-    def _hybrid_classify(self, text, metrics):
-        """Classify using both text and metrics."""
-        text_cat = self._keyword_classify(text, metrics)
-        metric_cat = self._metric_classify(text, metrics)
-        if text_cat != "unknown": return text_cat
-        return metric_cat
+    # Validate: if the LLM returned something unexpected, default to WARNING
+    # This is defensive programming - like a CHECK constraint with a fallback
+    if vote not in ("CRITICAL", "WARNING", "OK"):
+        vote = "WARNING"
 
-    def vote(self, text, metrics):
-        """All agents vote, majority wins."""
-        votes = {}
-        for name, classify_fn in self.classifiers.items():
-            category = classify_fn(text, metrics)
-            votes[name] = category
-
-        # Count votes
-        vote_counts = Counter(votes.values())
-        most_common = vote_counts.most_common(1)[0]
-        winner, count = most_common
-
-        # Need majority (2 out of 3)
-        if count >= 2:
-            consensus = True
-            confidence = count / len(self.classifiers)
-        else:
-            consensus = False
-            winner = "needs_review"
-            confidence = 0.33
-
-        return {
-            "category": winner,
-            "confidence": round(confidence, 2),
-            "consensus": consensus,
-            "votes": votes,
-            "vote_counts": dict(vote_counts),
-        }
+    return vote
 
 
-# Test
-voter = VotingClassifier()
+# -----------------------------------------------------------------------
+# VOTING PIPELINE
+# -----------------------------------------------------------------------
+
+def run_vote(metric_description: str) -> str:
+    # Start with an empty list to collect votes - like a fresh temp table
+    votes = []
+
+    # range(1, 4) produces [1, 2, 3] - we call each agent once
+    # This is like running the same query across 3 read replicas
+    for agent_id in range(1, 4):
+        vote = voter_agent(metric_description, agent_id)
+        votes.append(vote)
+        print(f"  Agent {agent_id} voted: {vote}")
+
+    # Counter(votes) counts occurrences of each value in the list
+    # .most_common(1) returns the single most common item as a list of (value, count) tuples
+    # [0][0] gets the value from that tuple
+    # SQL equivalent: SELECT severity FROM votes ORDER BY cnt DESC LIMIT 1
+    winner = Counter(votes).most_common(1)[0][0]
+    return winner
+
+
+# -----------------------------------------------------------------------
+# RUN IT
+# -----------------------------------------------------------------------
+
+metric = "table bloat=78%, autovacuum not running, dead_tuples=4200000, table_size=12GB"
+
+print("=== AGENT VOTING SYSTEM ===")
+print(f"Metric: {metric}\n")
+print("Votes:")
+
+final_verdict = run_vote(metric)
+
+print(f"\nMajority verdict: {final_verdict}")
+
+PYEOF
+```
+
+### Expected output (yours will differ):
+
+```
+=== AGENT VOTING SYSTEM ===
+Metric: table bloat=78%, autovacuum not running, dead_tuples=4200000, table_size=12GB
+
+Votes:
+  Agent 1 voted: CRITICAL
+  Agent 2 voted: CRITICAL
+  Agent 3 voted: WARNING
+
+Majority verdict: CRITICAL
+```
+
+---
+
+## Exercise 4: Agent Specialization Test (Measure Accuracy Per-Agent vs Single-Agent)
+
+### What you are building
+
+Four specialized agents each handle one category of database problem (connections,
+replication, storage, locks). A single generalist agent handles all categories. You
+run both against the same test cases and compare how often each is correct.
+
+This mirrors a design decision you make in databases: a partitioned table with dedicated
+indexes per partition vs. one large table with a general-purpose index. Specialization
+wins in high-volume predictable workloads.
+
+### Concepts
+
+- Specialist agent: given a focused system prompt for one narrow domain
+- Accuracy: (correct answers / total answers) * 100 - the same SLA math you already do
+- Baseline: the generalist agent's score is the benchmark everything else is measured against
+
+### Code
+
+On your **Mac terminal**, paste this entire block and press Enter:
+
+```bash
+python3 << 'PYEOF'
+
+import openai
+import os
+
+client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+# -----------------------------------------------------------------------
+# TEST CASES
+# -----------------------------------------------------------------------
+# Each test case has:
+#   metric   - the raw input
+#   category - what domain it belongs to
+#   expected - the correct severity answer
 
 test_cases = [
-    ("CPU at 95%", {"cpu_percent": 95}),
-    ("Disk full", {"disk_percent": 98}),
-    ("Something slow", {"cpu_percent": 96}),                  # text vague, metric clear
-    ("Connection timeout", {"cpu_percent": 92}),              # text and metric disagree
-    ("Server issue", {"cpu_percent": 50, "disk_percent": 40}), # no strong signal
+    {"metric": "active_connections=199, max_connections=200", "category": "connections", "expected": "CRITICAL"},
+    {"metric": "active_connections=50, max_connections=200",  "category": "connections", "expected": "OK"},
+    {"metric": "replication_lag_seconds=600",                  "category": "replication", "expected": "CRITICAL"},
+    {"metric": "replication_lag_seconds=5",                    "category": "replication", "expected": "OK"},
+    {"metric": "disk_usage_percent=95, tablespace=pg_default", "category": "storage",     "expected": "CRITICAL"},
+    {"metric": "disk_usage_percent=40, tablespace=pg_default", "category": "storage",     "expected": "OK"},
+    {"metric": "lock_wait_count=22, oldest_lock_age_sec=180",  "category": "locks",       "expected": "CRITICAL"},
+    {"metric": "lock_wait_count=0",                            "category": "locks",       "expected": "OK"},
 ]
 
-print(f"\nVoting Results:")
-print("-" * 70)
+# -----------------------------------------------------------------------
+# SPECIALIST AGENTS
+# -----------------------------------------------------------------------
+# Each specialist has a focused system prompt that encodes domain-specific thresholds.
+# This is the same knowledge a DBA would write into an alert rule:
+# "connection usage > 90% = CRITICAL"
 
-for text, metrics in test_cases:
-    result = voter.vote(text, metrics)
-    votes_str = ", ".join(f"{k}={v}" for k, v in result["votes"].items())
+specialist_prompts = {
+    "connections": (
+        "You are a PostgreSQL connection specialist. "
+        "If connections exceed 90% of max_connections, respond CRITICAL. "
+        "If between 70-90%, respond WARNING. Below 70%, respond OK. "
+        "Respond with exactly one word."
+    ),
+    "replication": (
+        "You are a PostgreSQL replication specialist. "
+        "If replication lag exceeds 300 seconds, respond CRITICAL. "
+        "If between 60-300 seconds, respond WARNING. Below 60 seconds, respond OK. "
+        "Respond with exactly one word."
+    ),
+    "storage": (
+        "You are a PostgreSQL storage specialist. "
+        "If disk usage exceeds 90%, respond CRITICAL. "
+        "If between 75-90%, respond WARNING. Below 75%, respond OK. "
+        "Respond with exactly one word."
+    ),
+    "locks": (
+        "You are a PostgreSQL lock contention specialist. "
+        "If lock_wait_count exceeds 10 or oldest lock exceeds 120 seconds, respond CRITICAL. "
+        "If lock_wait_count is 1-10, respond WARNING. Otherwise respond OK. "
+        "Respond with exactly one word."
+    ),
+}
 
-    status = "CONSENSUS" if result["consensus"] else "NO CONSENSUS"
-    print(f"\n  '{text}' + {metrics}")
-    print(f"    Votes: {votes_str}")
-    print(f"    Result: {result['category']} ({result['confidence']:.0%}) [{status}]")
+# -----------------------------------------------------------------------
+# GENERALIST AGENT
+# -----------------------------------------------------------------------
 
-print("""
-Voting prevents single-agent errors:
-  - 3 agents agree = high confidence (auto-handle)
-  - 2 agents agree = moderate confidence (handle with caution)
-  - No majority = escalate to human (something is ambiguous)
-""")
-PYEOF
-```
+generalist_prompt = (
+    "You are a general database health classifier. "
+    "Given any database metric, respond with exactly one word: CRITICAL, WARNING, or OK."
+)
 
----
 
-## Exercise 4. Agent specialization test
-
-On your **Mac terminal**, run:
-
-```bash
-python3 << 'PYEOF'
-
-# ============================================================
-# Exercise: Compare one generalist agent vs multiple specialists.
-# Which approach is more accurate?
-#
-# DBA analogy: one DBA who does everything vs
-# a team of specialists (performance DBA, replication DBA, etc.)
-# ============================================================
-
-print("Exercise 4: Generalist vs Specialist Agents")
-print("=" * 55)
-
-# Generalist: one agent handles everything
-class GeneralistAgent:
-    def classify(self, text, metrics):
-        t = text.lower()
-        rules = [
-            (["cpu", "slow", "query"], "performance"),
-            (["disk", "full", "space"], "storage"),
-            (["replication", "lag"], "replication"),
-            (["connection", "timeout"], "connectivity"),
+def call_agent(system_prompt: str, metric: str) -> str:
+    # Single reusable function - both specialist and generalist use the same call pattern
+    # This is like a generic execute_query() wrapper that accepts different SQL strings
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": f"Metric: {metric}"}
         ]
-        for keywords, cat in rules:
-            if any(kw in t for kw in keywords):
-                return cat
-        return "unknown"
-
-# Specialists: each focused on one category
-class PerformanceSpecialist:
-    def score(self, text, metrics):
-        t = text.lower()
-        score = 0
-        # Deep knowledge of performance keywords
-        perf_words = ["cpu", "slow", "query", "latency", "lock", "wait",
-                      "vacuum", "analyze", "bloat", "idle in transaction"]
-        score += sum(2 for kw in perf_words if kw in t)
-        if metrics.get("cpu_percent", 0) > 80: score += 3
-        if metrics.get("longest_query_seconds", 0) > 60: score += 3
-        return score
-
-class StorageSpecialist:
-    def score(self, text, metrics):
-        t = text.lower()
-        score = 0
-        storage_words = ["disk", "full", "space", "wal", "tablespace",
-                         "archive", "bloat", "toast", "pg_wal"]
-        score += sum(2 for kw in storage_words if kw in t)
-        if metrics.get("disk_percent", 0) > 80: score += 3
-        if metrics.get("wal_size_gb", 0) > 10: score += 3
-        return score
-
-class ReplicationSpecialist:
-    def score(self, text, metrics):
-        t = text.lower()
-        score = 0
-        repl_words = ["replication", "lag", "standby", "replica", "failover",
-                      "wal receiver", "wal sender", "streaming"]
-        score += sum(2 for kw in repl_words if kw in t)
-        if metrics.get("replication_lag_seconds", 0) > 10: score += 3
-        return score
-
-class SpecialistTeam:
-    def __init__(self):
-        self.specialists = {
-            "performance": PerformanceSpecialist(),
-            "storage": StorageSpecialist(),
-            "replication": ReplicationSpecialist(),
-        }
-
-    def classify(self, text, metrics):
-        scores = {}
-        for cat, specialist in self.specialists.items():
-            scores[cat] = specialist.score(text, metrics)
-        if max(scores.values()) == 0:
-            return "unknown"
-        return max(scores, key=scores.get)
+    )
+    result = response.choices[0].message.content.strip().upper()
+    # Clamp unexpected responses to WARNING so scoring stays clean
+    if result not in ("CRITICAL", "WARNING", "OK"):
+        result = "WARNING"
+    return result
 
 
-# Test data with correct labels
-test_data = [
-    ("CPU at 95% slow queries", {"cpu_percent": 95}, "performance"),
-    ("Disk full on /pgdata", {"disk_percent": 98}, "storage"),
-    ("Replication lag 120s on standby", {"replication_lag_seconds": 120}, "replication"),
-    ("WAL archive failing, disk growing", {"disk_percent": 90, "wal_size_gb": 25}, "storage"),
-    ("Idle in transaction blocking queries", {"cpu_percent": 70}, "performance"),
-    ("Standby streaming replication broken", {"replication_lag_seconds": 500}, "replication"),
-    ("Table bloat causing slow scans", {"cpu_percent": 80, "disk_percent": 85}, "storage"),
-    ("Lock wait timeout on queries", {"cpu_percent": 88}, "performance"),
-]
+# -----------------------------------------------------------------------
+# RUN THE TEST
+# -----------------------------------------------------------------------
 
-generalist = GeneralistAgent()
-team = SpecialistTeam()
+specialist_correct = 0
+generalist_correct = 0
+total = len(test_cases)
 
-gen_correct = 0
-team_correct = 0
+print("=== SPECIALIZATION ACCURACY TEST ===\n")
+print(f"{'Metric':<45} {'Cat':<12} {'Expected':<10} {'Specialist':<12} {'Generalist'}")
+print("-" * 100)
 
-print(f"\n{'Alert':<40s} {'Actual':<13s} {'Generalist':<13s} {'Specialists':<13s}")
-print("-" * 80)
+for tc in test_cases:
+    metric   = tc["metric"]
+    category = tc["category"]
+    expected = tc["expected"]
 
-for text, metrics, actual in test_data:
-    gen_pred = generalist.classify(text, metrics)
-    team_pred = team.classify(text, metrics)
+    # Route to the matching specialist based on the category key
+    # This is like a partition-routing function: which node handles this row?
+    specialist_prompt  = specialist_prompts[category]
+    specialist_answer  = call_agent(specialist_prompt, metric)
+    generalist_answer  = call_agent(generalist_prompt, metric)
 
-    gen_match = "ok" if gen_pred == actual else "MISS"
-    team_match = "ok" if team_pred == actual else "MISS"
+    # Score: add 1 if the answer matches expected - like a CHECK constraint passing
+    if specialist_answer == expected:
+        specialist_correct += 1
+    if generalist_answer == expected:
+        generalist_correct += 1
 
-    gen_correct += 1 if gen_pred == actual else 0
-    team_correct += 1 if team_pred == actual else 0
+    # ljust pads a string to a fixed width - keeps columns aligned
+    print(f"{metric[:44]:<45} {category:<12} {expected:<10} {specialist_answer:<12} {generalist_answer}")
 
-    print(f"{text[:40]:<40s} {actual:<13s} {gen_pred:<8s} {gen_match:<4s} "
-          f"{team_pred:<8s} {team_match}")
+# Calculate accuracy as a percentage
+# round(value, 1) = same as ROUND(value, 1) in SQL
+specialist_accuracy = round((specialist_correct / total) * 100, 1)
+generalist_accuracy = round((generalist_correct / total) * 100, 1)
 
-n = len(test_data)
-print(f"\nGeneralist: {gen_correct}/{n} ({gen_correct/n:.0%})")
-print(f"Specialists: {team_correct}/{n} ({team_correct/n:.0%})")
+print("-" * 100)
+print(f"\nSpecialist accuracy : {specialist_accuracy}%  ({specialist_correct}/{total} correct)")
+print(f"Generalist accuracy : {generalist_accuracy}%  ({generalist_correct}/{total} correct)")
 
-print("""
-Specialists are more accurate because:
-  - Each knows MORE keywords for their category
-  - Each considers category-specific metrics
-  - Deeper expertise per domain
-
-Trade-off:
-  Generalist: simpler, one model to maintain
-  Specialists: more accurate, but more complexity
-""")
 PYEOF
+```
+
+### Expected output (yours will differ):
+
+```
+=== SPECIALIZATION ACCURACY TEST ===
+
+Metric                                        Cat          Expected   Specialist   Generalist
+----------------------------------------------------------------------------------------------------
+active_connections=199, max_connections=200   connections  CRITICAL   CRITICAL     CRITICAL
+active_connections=50, max_connections=200    connections  OK         OK           OK
+replication_lag_seconds=600                   replication  CRITICAL   CRITICAL     CRITICAL
+replication_lag_seconds=5                     replication  OK         OK           OK
+disk_usage_percent=95, tablespace=pg_default  storage      CRITICAL   CRITICAL     CRITICAL
+disk_usage_percent=40, tablespace=pg_default  storage      OK         OK           OK
+lock_wait_count=22, oldest_lock_age_sec=180   locks        CRITICAL   CRITICAL     WARNING
+lock_wait_count=0                             locks        OK         OK           OK
+----------------------------------------------------------------------------------------------------
+
+Specialist accuracy : 100.0%  (8/8 correct)
+Generalist accuracy : 87.5%  (7/8 correct)
 ```
 
 ---
 
-## Exercise 5. End-to-end multi-agent system
+## Exercise 5: End-to-End Multi-Agent Alert System
 
-On your **Mac terminal**, run:
+### What you are building
+
+A four-stage pipeline that mirrors a real DBA on-call workflow:
+
+```
+Stage 1 - Monitor   : reads the metric, describes what is happening
+Stage 2 - Classify  : assigns severity (CRITICAL / WARNING / OK)
+Stage 3 - Diagnose  : identifies the root cause
+Stage 4 - Remediate : recommends the fix
+```
+
+This is the equivalent of: alert fires -> DBA looks at it -> DBA diagnoses -> DBA acts.
+You are encoding that workflow into four cooperating agents.
+
+### Concepts
+
+- Each stage is an agent with a narrow job - the Unix "do one thing well" philosophy
+- Data flows forward only - the output of stage N becomes the input of stage N+1
+- The final result is a dict (like a row in an alerts table) containing all four fields
+
+### Code
+
+On your **Mac terminal**, paste this entire block and press Enter:
 
 ```bash
 python3 << 'PYEOF'
 
-# ============================================================
-# Exercise: Build a complete multi-agent alert system.
-# Monitor -> Classify -> Diagnose -> Remediate -> Report
-#
-# DBA analogy: full incident response pipeline, automated.
-# ============================================================
+import openai
+import os
 
-print("Exercise 5: End-to-End Multi-Agent System")
-print("=" * 55)
+client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-class MultiAgentSystem:
-    """
-    Complete multi-agent alert processing system.
+# -----------------------------------------------------------------------
+# AGENT DEFINITIONS
+# -----------------------------------------------------------------------
 
-    Agents:
-    1. Monitor: detect alert conditions
-    2. Classifier: categorize the alert
-    3. Diagnostics: find root cause
-    4. Remediation: recommend actions
-    5. Reporter: generate summary
-    """
-
-    def __init__(self):
-        self.log = []                    # processing log
-
-    def _monitor(self, raw_input):
-        metrics = raw_input.get("metrics", {})
-        alerts = []
-        if metrics.get("cpu_percent", 0) > 85:
-            alerts.append("cpu_critical")
-        if metrics.get("disk_percent", 0) > 85:
-            alerts.append("disk_critical")
-        if metrics.get("replication_lag_seconds", 0) > 30:
-            alerts.append("replication_lag")
-        self.log.append({"agent": "monitor", "alerts_detected": len(alerts)})
-        return {**raw_input, "alerts": alerts}
-
-    def _classify(self, data):
-        text = data.get("text", "").lower()
-        rules = {"performance": ["cpu","slow","query"],
-                 "storage": ["disk","full","wal"],
-                 "replication": ["replication","lag","standby"]}
-        for cat, kws in rules.items():
-            if any(kw in text for kw in kws):
-                self.log.append({"agent": "classifier", "category": cat})
-                return {**data, "category": cat, "confidence": 0.85}
-        self.log.append({"agent": "classifier", "category": "unknown"})
-        return {**data, "category": "unknown", "confidence": 0.2}
-
-    def _diagnose(self, data):
-        causes = {
-            "performance": "Check pg_stat_activity for long-running queries",
-            "storage": "Check WAL archiving and table bloat",
-            "replication": "Check pg_stat_replication and network",
-        }
-        cause = causes.get(data.get("category"), "Manual investigation needed")
-        self.log.append({"agent": "diagnostics", "cause": cause[:40]})
-        return {**data, "root_cause": cause}
-
-    def _remediate(self, data):
-        plans = {
-            "performance": [{"action": "Check active queries", "risk": "low"},
-                           {"action": "Kill long-running query if needed", "risk": "medium"}],
-            "storage": [{"action": "Check disk usage: df -h", "risk": "low"},
-                       {"action": "VACUUM bloated tables", "risk": "medium"}],
-            "replication": [{"action": "Check replication status", "risk": "low"},
-                          {"action": "Restart WAL receiver", "risk": "medium"}],
-        }
-        plan = plans.get(data.get("category"), [{"action": "Investigate", "risk": "low"}])
-        self.log.append({"agent": "remediation", "actions": len(plan)})
-        return {**data, "remediation_plan": plan}
-
-    def _report(self, data):
-        summary = (
-            f"Alert: {data.get('text', 'N/A')[:40]}\n"
-            f"Category: {data.get('category')} ({data.get('confidence', 0):.0%})\n"
-            f"Root cause: {data.get('root_cause', 'N/A')[:50]}\n"
-            f"Actions: {len(data.get('remediation_plan', []))} recommended"
-        )
-        self.log.append({"agent": "reporter", "summary_length": len(summary)})
-        return {**data, "summary": summary}
-
-    def process(self, raw_input):
-        """Run all agents in sequence."""
-        self.log = []
-        data = self._monitor(raw_input)
-        data = self._classify(data)
-        data = self._diagnose(data)
-        data = self._remediate(data)
-        data = self._report(data)
-        return data
+def agent_monitor(raw_metric: str) -> str:
+    """Stage 1: Describe what is happening in plain English."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a database monitor. Describe what the "
+                                          "metric indicates in two sentences. Be factual and specific."},
+            {"role": "user",   "content": f"Raw metric: {raw_metric}"}
+        ]
+    )
+    return response.choices[0].message.content.strip()
 
 
-# Run the system
-system = MultiAgentSystem()
+def agent_classify(observation: str) -> str:
+    """Stage 2: Assign a severity level to the observation."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a severity classifier. Respond with "
+                                          "exactly one word: CRITICAL, WARNING, or OK."},
+            {"role": "user",   "content": f"Observation: {observation}"}
+        ]
+    )
+    return response.choices[0].message.content.strip().upper()
 
-test_alerts = [
-    {"text": "CPU at 95% long-running query on primary", "metrics": {"cpu_percent": 95}},
-    {"text": "Disk full on /pgdata WAL growing", "metrics": {"disk_percent": 98}},
-    {"text": "Replication lag 300s on standby-2", "metrics": {"replication_lag_seconds": 300}},
+
+def agent_diagnose(observation: str, severity: str) -> str:
+    """Stage 3: Identify the root cause given the observation and severity."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a PostgreSQL root cause analyst. "
+                    "Given a database observation and its severity, identify the most "
+                    "likely root cause. One sentence only."
+                )
+            },
+            {
+                "role": "user",
+                # We pass BOTH the observation and severity into this agent
+                # Stage 3 knows what happened AND how bad it is before diagnosing
+                "content": f"Observation: {observation}\nSeverity: {severity}"
+            }
+        ]
+    )
+    return response.choices[0].message.content.strip()
+
+
+def agent_remediate(observation: str, root_cause: str, severity: str) -> str:
+    """Stage 4: Recommend a concrete remediation action."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a PostgreSQL remediation specialist. "
+                    "Given an observation, root cause, and severity, recommend ONE specific action. "
+                    "Be concrete - name the exact PostgreSQL command or configuration change needed."
+                )
+            },
+            {
+                "role": "user",
+                # Stage 4 gets everything the previous stages produced
+                # This is cumulative context - each stage adds to the shared knowledge
+                "content": (
+                    f"Observation : {observation}\n"
+                    f"Root cause  : {root_cause}\n"
+                    f"Severity    : {severity}"
+                )
+            }
+        ]
+    )
+    return response.choices[0].message.content.strip()
+
+
+# -----------------------------------------------------------------------
+# PIPELINE ORCHESTRATOR
+# -----------------------------------------------------------------------
+# This function runs all four agents in sequence and returns a structured result.
+# Think of it as a stored procedure that calls four sub-procedures in order
+# and returns a composite row type.
+
+def run_alert_pipeline(raw_metric: str) -> dict:
+    print(f"\nInput metric: {raw_metric}")
+    print("Running pipeline...")
+
+    # Stage 1
+    print("  [1/4] Monitor agent...")
+    observation = agent_monitor(raw_metric)
+
+    # Stage 2 - receives Stage 1's output
+    print("  [2/4] Classifier agent...")
+    severity = agent_classify(observation)
+
+    # Stage 3 - receives Stage 1 and Stage 2 outputs
+    print("  [3/4] Diagnosis agent...")
+    root_cause = agent_diagnose(observation, severity)
+
+    # Stage 4 - receives all previous outputs
+    print("  [4/4] Remediation agent...")
+    remedy = agent_remediate(observation, root_cause, severity)
+
+    # Return a dict - think of this as one row in an alerts table
+    # Keys map to column names: observation, severity, root_cause, recommended_action
+    return {
+        "observation":        observation,
+        "severity":           severity,
+        "root_cause":         root_cause,
+        "recommended_action": remedy
+    }
+
+
+# -----------------------------------------------------------------------
+# RUN THREE DIFFERENT SCENARIOS
+# -----------------------------------------------------------------------
+
+scenarios = [
+    "connections_used=199, max_connections=200, top_application=reporting_app",
+    "checkpoint_completion_target=0.9, bgwriter_lru_maxpages=100, shared_buffers=128MB, dirty_pages_written=48000/sec",
+    "autovacuum_running=false, dead_tuples=8500000, table=orders, last_vacuum=14_days_ago",
 ]
 
-for alert in test_alerts:
-    result = system.process(alert)
+print("=" * 70)
+print("END-TO-END MULTI-AGENT ALERT SYSTEM")
+print("=" * 70)
 
-    print(f"\n{result['summary']}")
-    print(f"Pipeline: {' -> '.join(step['agent'] for step in system.log)}")
-    print("-" * 55)
+# enumerate(scenarios, start=1) adds a counter starting at 1
+# Like ROW_NUMBER() OVER (ORDER BY ...) in SQL
+for i, metric in enumerate(scenarios, start=1):
+    result = run_alert_pipeline(metric)
 
-print("""
-This is the foundation of dbaBrain:
-  5 agents, each with one job, working together.
-  Every step is logged, auditable, and replaceable.
-""")
+    print(f"\n--- ALERT REPORT #{i} ---")
+    # .items() gives us (key, value) pairs - like iterating column names and values
+    for key, value in result.items():
+        # Replace underscores with spaces and capitalize the key for readability
+        label = key.replace("_", " ").upper()
+        print(f"{label}:\n  {value}\n")
+
+print("=" * 70)
+
 PYEOF
+```
+
+### Expected output (yours will differ):
+
+```
+======================================================================
+END-TO-END MULTI-AGENT ALERT SYSTEM
+======================================================================
+
+Input metric: connections_used=199, max_connections=200, top_application=reporting_app
+Running pipeline...
+  [1/4] Monitor agent...
+  [2/4] Classifier agent...
+  [3/4] Diagnosis agent...
+  [4/4] Remediation agent...
+
+--- ALERT REPORT #1 ---
+OBSERVATION:
+  The database is at 99.5% of its maximum connection capacity with 199 out of 200
+  connections in use, predominantly from the reporting_app application.
+
+SEVERITY:
+  CRITICAL
+
+ROOT CAUSE:
+  The reporting_app is likely holding long-lived connections without releasing them,
+  exhausting the connection pool.
+
+RECOMMENDED ACTION:
+  Run SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name =
+  'reporting_app' AND state = 'idle' AND state_change < NOW() - INTERVAL '10 minutes';
+  then configure PgBouncer as a connection pooler.
+...
 ```
 
 ---
 
-## What You Practiced
+## Summary
 
-| Exercise | Skill | Production Use |
-|----------|-------|---------------|
-| Two-agent pipeline | Basic agent chaining | Alert detection + classification |
-| Audit trail | Log all agent communication | Debugging and compliance |
-| Agent voting | Consensus-based classification | Prevent single-agent errors |
-| Specialist vs generalist | Multi-agent accuracy gains | Optimize per-category accuracy |
-| End-to-end system | Full agent pipeline | Production alert processing |
+| Exercise | Pattern | DBA Analogy |
+|----------|---------|-------------|
+| 1 | Two-agent pipeline | `pg_stat_activity` -> alert rule |
+| 2 | Audit trail | `pg_audit` log / `dba_audit` table |
+| 3 | Voting / quorum | Patroni 2-of-3 failover |
+| 4 | Specialization vs generalist | Partitioned index vs full-table index |
+| 5 | Four-stage end-to-end | Alert fires -> diagnose -> remediate |
+
+Next: Module 18 Survive labs - what happens when agents deadlock or go rogue.
