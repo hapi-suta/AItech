@@ -293,6 +293,9 @@ y_true[:75] = 1  # 15% incident rate
 np.random.shuffle(y_true)
 
 # Simulated model probabilities (roughly correct)
+# np.random.beta(2, 5, n) generates random numbers between 0 and 1
+# with a specific shape (skewed toward lower values)
+# Don't worry about the math - just know it makes realistic-looking probabilities
 probs = np.random.beta(2, 5, n).astype(float)  # skewed toward low values
 # For actual incidents, shift probabilities higher
 probs[y_true == 1] += np.random.uniform(0.3, 0.6, y_true.sum())

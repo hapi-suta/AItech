@@ -4,6 +4,10 @@
 
 You're building an AI model to predict slow database queries. Your teammate sent you the training dataset, but something is wrong - the model's accuracy is terrible (52%, basically a coin flip). Your job: find and fix the data problems.
 
+> **Note:** This scenario uses sklearn (machine learning library) which you'll learn in Module 6.
+> You don't need to understand the ML parts yet. Focus on the DATA problems - that's the DBA skill here.
+> The pandas commands (finding nulls, duplicates, wrong types) are what matter in this exercise.
+
 ---
 
 ## The Broken Code
@@ -14,9 +18,9 @@ Save this to a file and run it:
 cat > /tmp/survive_corrupted.py << 'PYEOF'
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split    # splits data into training/testing sets
+from sklearn.ensemble import RandomForestClassifier     # a machine learning model (Module 6)
+from sklearn.metrics import accuracy_score              # measures how often the model is correct
 
 np.random.seed(42)
 n = 1000

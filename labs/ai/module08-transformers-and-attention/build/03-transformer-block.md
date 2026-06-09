@@ -426,6 +426,9 @@ class MiniTransformer(nn.Module):
         # Each position (0, 1, 2, ...) gets its own learnable vector
 
         # Stack of Transformer blocks
+        # _ is a throwaway variable - we don't need the loop counter, just the repetition
+        # "for _ in range(4)" means "do this 4 times" without tracking which iteration
+        # DBA analogy: like generate_series(1, 4) when you only care about the count
         self.blocks = nn.ModuleList([
             TransformerBlock(d_model, num_heads, d_ff)
             for _ in range(num_blocks)

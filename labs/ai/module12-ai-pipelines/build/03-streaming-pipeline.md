@@ -79,8 +79,12 @@ def consumer():
             continue  # no events, keep waiting
 
 # Start consumer thread
+# A thread runs code in the background while other code continues.
+# threading.Thread(target=consumer) creates a thread that will run the consumer function.
+# daemon=True means: when the main program exits, this thread stops too.
+# DBA analogy: like a background worker process in PostgreSQL (autovacuum, WAL writer).
+# target=consumer passes the function itself (not calling it) - like a callback.
 consumer_thread = threading.Thread(target=consumer, daemon=True)
-# daemon=True means the thread stops when the main program exits
 consumer_thread.start()
 
 # Producer: simulate alerts arriving over time

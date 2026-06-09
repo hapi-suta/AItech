@@ -51,6 +51,9 @@ call_count = 0
 
 def flaky_embedding_api():
     """Simulates an embedding API that sometimes fails."""
+    # "global" lets a function modify a variable defined outside the function.
+    # Without "global", Python would create a new local variable instead.
+    # DBA analogy: like a session variable (SET myvar = ...) vs a local variable in PL/pgSQL.
     global call_count
     call_count += 1
     if random.random() < 0.6:

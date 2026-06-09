@@ -20,6 +20,15 @@ from datetime import datetime
 # 3. Process
 # 4. Return output (or error)
 
+# @dataclass is a decorator that auto-generates setup code for a class.
+# Without it, you'd write __init__(self, ...) manually for every field.
+# With it, Python creates __init__ for you from the field definitions.
+# DBA analogy: like CREATE TABLE with columns - you define the fields,
+# PostgreSQL handles the storage details automatically.
+#
+# field(default_factory=lambda: []) means "default value is an empty list."
+# lambda: [] is a tiny function that creates a new empty list each time.
+# DBA analogy: like DEFAULT '[]'::jsonb on a column.
 @dataclass
 class PipelineResult:
     """Result from a pipeline stage."""
@@ -120,6 +129,10 @@ class PipelineResult:
 # Stage 1: Ingest
 def ingest_alerts(raw_data: list) -> PipelineResult:
     """Parse raw alert data into structured format."""
+    # try/except handles errors gracefully instead of crashing.
+    # Code inside "try" runs normally. If it fails, "except" catches the error.
+    # "except Exception as e" catches any error and stores it in variable "e".
+    # DBA analogy: like BEGIN ... EXCEPTION WHEN others THEN ... END in PL/pgSQL.
     try:
         alerts = []
         for item in raw_data:
@@ -165,6 +178,9 @@ def transform_alerts(alerts: list) -> PipelineResult:
     """Normalize and enrich alert data."""
     transformed = []
     for alert in alerts:
+        # **alert "spreads" all key-value pairs from the alert dict into this new dict.
+        # Then we add extra fields after it. The result is a copy of alert PLUS new fields.
+        # DBA analogy: like SELECT *, lower(message) AS message_lower FROM alerts
         transformed.append({
             **alert,  # spread all existing fields
             "message_lower": alert["message"].lower(),
@@ -369,6 +385,13 @@ def classify(alerts):
             "security": ["login", "ssl", "password", "unauthorized"]}
     for a in alerts:
         msg = a["message_lower"]
+        # This line does a LOT. Let's break it down:
+        # For each category (c) and its keywords (kws) in the dictionary:
+        #   count how many keywords appear in the message
+        #   store as {category: count}
+        # It's like running this SQL for each category:
+        #   SELECT category, COUNT(*) FROM keywords WHERE keyword IN (message_words)
+        # The result is a dict like {"performance": 3, "storage": 1, "replication": 0}
         scores = {c: sum(1 for k in kws if k in msg) for c, kws in cats.items()}
         a["category"] = max(scores, key=scores.get) if max(scores.values()) > 0 else "unknown"
     return PipelineResult(success=True, data=alerts, stage="classify")

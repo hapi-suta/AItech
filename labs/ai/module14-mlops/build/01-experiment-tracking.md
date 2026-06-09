@@ -140,6 +140,9 @@ class ExperimentTracker:
                     "params": exp["params"],
                 })
         # Sort by metric (descending = best first)
+        # lambda x: x[metric] is a tiny function: given x (a dict), return x[metric]
+        # This tells sort() to compare experiments by their metric value.
+        # DBA analogy: ORDER BY metric_value DESC
         results.sort(key=lambda x: x[metric], reverse=True)
         return results
 

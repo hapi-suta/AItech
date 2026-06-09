@@ -250,6 +250,9 @@ loss_fn = nn.BCELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
 
 # --- Early stopping ---
+# float('inf') = infinity. Any real number is smaller than infinity.
+# We start with infinity so the first real loss is always "better."
+# DBA analogy: like initializing a MIN search with MAX_VALUE
 best_test_loss = float('inf')  # start with infinity (anything is better)
 patience = 10                  # stop if no improvement for 10 epochs
 patience_counter = 0
@@ -279,6 +282,8 @@ for epoch in range(200):
         best_epoch = epoch
         patience_counter = 0
         # Save the best model weights
+        # state_dict() exports all model weights - like pg_dump for a model
+        # .copy() makes a separate copy so the original isn't modified
         best_weights = model.state_dict().copy()
     else:
         patience_counter += 1
@@ -293,6 +298,7 @@ for epoch in range(200):
         break
 
 # Restore the best weights
+# load_state_dict() loads weights back in - like pg_restore
 model.load_state_dict(best_weights)
 model.eval()
 with torch.no_grad():

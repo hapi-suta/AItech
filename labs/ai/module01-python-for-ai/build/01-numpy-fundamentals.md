@@ -2,6 +2,36 @@
 
 NumPy is the math engine behind all of AI. Every model, every embedding, every calculation runs through NumPy arrays. This guide teaches you the operations you'll use constantly.
 
+## Python Foundations Reference
+
+If you're coming from SQL and haven't used Python before, here are the patterns you'll see throughout this entire curriculum (Modules 1-19). Each one has a DBA analogy so you can map it to something you already know.
+
+| Python Pattern | Example | DBA Analogy |
+|---------------|---------|-------------|
+| `import X` | `import numpy` | `USE database` or `SET search_path` - loads a library so you can use it |
+| `from X import Y` | `from sklearn import metrics` | Like importing a specific function from a schema |
+| `import X as Y` | `import numpy as np` | An alias - like `SELECT col AS alias` |
+| f-string | `f"Count: {total}"` | `format()` in PL/pgSQL or string concatenation with `\|\|` |
+| List comprehension | `[x for x in items if x > 10]` | `SELECT x FROM items WHERE x > 10` |
+| Dict comprehension | `{k: v for k, v in items}` | `SELECT key, value FROM items` - result is a lookup table |
+| Counting pattern | `sum(1 for x in items if x > 0)` | `SELECT COUNT(*) FROM items WHERE x > 0` |
+| `.get(key, default)` | `d.get("port", 5432)` | `COALESCE(port, 5432)` |
+| `lambda` | `lambda x: x[1]` | Tiny unnamed function - like an inline expression in `ORDER BY` |
+| `sorted()` | `sorted(items, key=lambda x: x[1])` | `ORDER BY column DESC` |
+| `zip(a, b)` | `zip(names, scores)` | Joining two arrays by position |
+| `enumerate(items)` | `for i, item in enumerate(items)` | `ROW_NUMBER() OVER()` - loop with index counter |
+| Tuple unpacking | `a, b = function()` | `SELECT col1, col2 INTO var1, var2` |
+| `set()` | `set(items)` | `SELECT DISTINCT` - collection with no duplicates |
+| `try/except` | `try: ... except: ...` | `BEGIN...EXCEPTION WHEN...END` in PL/pgSQL |
+| Slice notation | `items[:5]`, `items[-3:]` | `LIMIT 5`, last 3 rows - `items[:5]` first 5, `items[5:]` after 5th, `items[-3:]` last 3 |
+| `class` | `class Pipeline:` | `CREATE TYPE` - defines a blueprint/template |
+| `self` | `self.conn = ...` | Like `NEW` in a trigger - refers to the current instance |
+| `__init__` | `def __init__(self):` | Constructor - like `DEFAULT` values, runs when you create an instance |
+| `@decorator` | `@mcp.tool()` | Like a trigger that wraps a function with extra behavior |
+| `**kwargs` | `**block.input` | Unpack a dict as named arguments - like passing JSONB fields as function parameters |
+
+> **You don't need to memorize these.** Come back to this reference when you see a pattern you don't recognize.
+
 ---
 
 ## Step 1. Create your first array
@@ -12,7 +42,7 @@ On your **Mac terminal**, run:
 
 ```bash
 python3 -c "
-import numpy as np
+import numpy as np    # 'as np' means 'I'll call it np for short' - like a SQL alias
 
 a = np.array([1, 2, 3, 4, 5])
 print('Array:', a)

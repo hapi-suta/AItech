@@ -138,6 +138,9 @@ cur.execute("""
     SELECT id FROM vector_bench
     ORDER BY embedding <=> %s::vector LIMIT 10
 """, (query_str,))
+# set() creates a collection with no duplicates (like SELECT DISTINCT).
+# .intersection() finds items in BOTH sets (like INTERSECT in SQL).
+# set_a - set_b finds items in A but not in B (like EXCEPT in SQL).
 exact_ids = set(row[0] for row in cur.fetchall())
 cur.execute("SET enable_indexscan = on")
 

@@ -366,6 +366,15 @@ import anthropic
 from sentence_transformers import SentenceTransformer
 
 
+# === PYTHON CLASSES - QUICK INTRO ===
+# A class is like CREATE TYPE in PostgreSQL - it defines a blueprint.
+# class RAGPipeline:           <- the blueprint name
+#     def __init__(self, ...): <- setup code, runs when you create one
+#                                 like DEFAULT values on a table
+#     self.conn = ...          <- "self" means "this instance"
+#                                 like NEW.column in a trigger function
+# To create one: pipeline = RAGPipeline(...)
+# This runs __init__ automatically, like INSERT triggers defaults.
 class RAGPipeline:
     def __init__(self, db_name="postgres", model_name="all-MiniLM-L6-v2"):
         self.conn = psycopg2.connect(f"dbname={db_name} host=/tmp")
@@ -427,6 +436,9 @@ If the context doesn't fully answer the question, say what's missing.""",
         self.conn.close()
 
 
+# __name__ == "__main__" means "only run this code if the file is executed directly."
+# If someone imports this file from another script, this block is skipped.
+# Think of it as: "run this only when I call the script, not when I load the library."
 if __name__ == "__main__":
     rag = RAGPipeline()
 

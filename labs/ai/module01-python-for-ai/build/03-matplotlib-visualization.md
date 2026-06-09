@@ -62,6 +62,8 @@ import numpy as np
 
 np.random.seed(42)
 minutes = np.arange(0, 60)
+# .cumsum() = cumulative sum. Each value is the running total of all previous values.
+# Combined with random numbers, it creates a realistic "wandering" line.
 cpu_primary = 40 + np.random.randn(60).cumsum() * 2
 cpu_standby = 25 + np.random.randn(60).cumsum() * 1.5
 
@@ -110,6 +112,7 @@ import numpy as np
 np.random.seed(42)
 rows = np.random.randint(10, 50000, 50)
 times = rows * 0.015 + np.random.randn(50) * 20 + 10
+# np.clip() limits values to a range - here, no query time below 1ms
 times = np.clip(times, 1, None)
 
 plt.figure(figsize=(8, 5))
@@ -151,10 +154,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 np.random.seed(42)
+# np.concatenate() joins multiple arrays into one - like UNION ALL in SQL.
+# np.random.normal(50, 15, 800) generates 800 random numbers centered at 50,
+#   with a spread of 15. The three arguments: (center, spread, count).
 query_times = np.concatenate([
     np.random.normal(50, 15, 800),
     np.random.normal(300, 50, 200)
 ])
+# np.clip(values, min, max) limits values to a range.
+# clip(query_times, 1, None) means "nothing below 1, no upper limit."
 query_times = np.clip(query_times, 1, None)
 
 plt.figure(figsize=(8, 5))
@@ -207,6 +215,9 @@ import numpy as np
 
 np.random.seed(42)
 
+# Tuple unpacking: plt.subplots returns two things (figure, axes).
+# "fig, axes = ..." assigns each to its own variable.
+# DBA analogy: SELECT fig, axes INTO v_fig, v_axes
 fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
 # Top left: bar chart

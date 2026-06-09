@@ -32,6 +32,10 @@ class AlertRequest(BaseModel):
     severity: str = Field(...)
     source: Optional[str] = Field(default="unknown", max_length=100)
 
+    # @field_validator("field_name") runs this function to validate that specific field.
+    # @classmethod means the function receives the class itself (cls) instead of an instance (self).
+    # DBA analogy: @field_validator is like a CHECK constraint on a specific column.
+    # cls is the table definition, not a row - used for validation logic that applies to all rows.
     @field_validator("severity")
     @classmethod
     def validate_severity(cls, v):
@@ -127,6 +131,16 @@ def process_sync(alerts):
         time.sleep(0.05)  # simulate 50ms inference
         results.append({"message": alert, "category": "performance"})
     return results
+
+# === ASYNC/AWAIT - WHAT YOU NEED TO KNOW ===
+# async def = a function that can pause and let other code run while waiting.
+# await = "pause here until this finishes, but let other requests proceed."
+# Without async: 100 requests processed one at a time (slow).
+# With async: 100 requests processed concurrently (fast).
+# DBA analogy: sync = one psql session running queries one by one.
+#              async = pgbouncer handling 100 connections to one database.
+# asyncio.gather(*tasks) = run all tasks at the same time and wait for all to finish.
+# The * unpacks the list so each task is a separate argument.
 
 # Async version (non-blocking)
 async def process_single(alert):

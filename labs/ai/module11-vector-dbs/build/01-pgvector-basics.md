@@ -87,8 +87,8 @@ On your **Mac terminal**, run:
 
 ```bash
 python3 << 'PYEOF'
-import psycopg2
-import numpy as np
+import psycopg2  # psycopg2 is the PostgreSQL driver for Python (like sqlplus for Oracle, psql for Postgres)
+import numpy as np  # numpy for math operations, "as np" is a short alias
 
 # Try to use sentence-transformers for real embeddings
 try:
@@ -124,6 +124,10 @@ docs = [
 
 # Generate embeddings
 if USE_REAL_EMBEDDINGS:
+    # List comprehension with _ (underscore) = throw away values you don't need.
+    # [content for _, content, _ in docs] means: from each 3-item tuple,
+    # keep only the second item (content), ignore first and third.
+    # DBA analogy: SELECT content FROM docs (ignoring the other columns)
     contents = [content for _, content, _ in docs]
     embeddings = model.encode(contents)
     # model.encode() converts text to embedding vectors
@@ -160,6 +164,9 @@ print(f"Inserted {len(docs)} documents with {embeddings.shape[1]}-dimensional em
 
 # Verify
 cur.execute("SELECT count(*), avg(vector_dims(embedding)) FROM documents")
+# Tuple unpacking: fetchone() returns one row as a tuple (like a pair of values).
+# count, dims = cur.fetchone() catches each column in its own variable.
+# DBA analogy: SELECT count, dims INTO v_count, v_dims FROM ...
 count, dims = cur.fetchone()
 print(f"Table has {count} rows with {int(dims)}-dimensional vectors")
 

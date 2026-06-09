@@ -137,7 +137,14 @@ SELECT pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(), pg_last_xact_replay_
 def chunk_by_section(text):
     """Split on chapter/section headers. Best for structured docs."""
     import re
+    # re.split() splits text using a pattern (regex).
+    # r'\n(?=Chapter \d+:)' means: split at newlines that come right before "Chapter"
+    # followed by a number and colon. (?=...) is a "lookahead" - it checks what's ahead
+    # without removing it, so "Chapter 2:" stays in the result.
     sections = re.split(r'\n(?=Chapter \d+:)', text)
+    # List comprehension: [expression for item in list if condition]
+    # This reads like SQL: SELECT s.strip() FROM sections WHERE s is not empty AND len > 20
+    # .strip() removes extra whitespace from both ends of the text
     return [s.strip() for s in sections if s.strip() and len(s.strip()) > 20]
 
 def chunk_by_paragraph(text, min_words=15):
@@ -258,6 +265,8 @@ for source, content in documents.items():
 
     embeddings = model.encode(chunks)
 
+    # zip(chunks, embeddings) pairs each chunk with its embedding (like joining by position).
+    # enumerate() adds a counter (i = 0, 1, 2...) - like ROW_NUMBER().
     for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
         cur.execute(
             """INSERT INTO documents (content, source, chunk_index, embedding)

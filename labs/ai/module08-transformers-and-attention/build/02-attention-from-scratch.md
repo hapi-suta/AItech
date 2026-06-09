@@ -334,6 +334,19 @@ DBA analogy: Like having multiple indexes on a table.
   does the same thing with word relationships.
 """)
 
+# === PYTHON CLASSES - WHAT YOU NEED TO KNOW ===
+# A class is a blueprint for creating objects. Like CREATE TYPE in PostgreSQL.
+#
+# class MultiHeadAttention(nn.Module):
+#   ^                      ^
+#   |                      +-- inherits from nn.Module (gets PyTorch features for free)
+#   +-- the name of our blueprint
+#
+# def __init__(self, ...):  <- runs when you create one (like DEFAULT values on a table)
+# self.something = ...      <- "self" refers to THIS instance (like NEW in a trigger)
+# super().__init__()        <- initialize the parent class (nn.Module) first
+#                              like calling a parent constructor before adding your own setup
+
 class MultiHeadAttention(nn.Module):
     """Multi-head attention from scratch."""
 

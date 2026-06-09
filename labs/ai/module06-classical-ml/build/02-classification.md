@@ -29,8 +29,13 @@ memory = np.random.uniform(20, 95, n)
 
 # Rule: incident if CPU > 70 AND connections > 180
 # np.random.random(n) adds randomness (some borderline cases go either way)
+# & means AND for arrays (not Python's "and" keyword - that only works on single values)
+# | means OR for arrays
+# DBA analogy: same as AND/OR in a WHERE clause, but for array operations
 incident = ((cpu > 70) & (connections > 180) |
             ((cpu > 85) & (memory > 80))).astype(int)
+# .astype(int) converts True/False to 1/0 (True becomes 1, False becomes 0)
+# DBA analogy: like CAST(boolean_col AS INTEGER) in SQL
 
 # Add some noise - flip 5% of labels randomly
 # This makes it realistic (real data has noise)
@@ -172,6 +177,10 @@ print()
 # The tree tells you which features it found most useful
 # Higher number = more important for making predictions
 print("Feature importance:")
+# sorted() puts items in order. key=lambda x: x[1] means "sort by the second item"
+# lambda is a tiny one-line function: lambda x: x[1] takes x and returns x[1]
+# reverse=True means highest first
+# DBA analogy: ORDER BY importance DESC
 for feature, importance in sorted(
     zip(X.columns, tree.feature_importances_),
     key=lambda x: x[1], reverse=True

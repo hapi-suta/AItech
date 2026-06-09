@@ -241,6 +241,8 @@ print('Shape:', df.shape)
 print()
 
 slow = df[df['status'] == 'slow']
+# f-string: the f before the quotes lets you put variables inside {braces}.
+# DBA analogy: like format() in PL/pgSQL or string concatenation with ||
 print(f'Slow queries: {len(slow)} out of {len(df)}')
 print()
 

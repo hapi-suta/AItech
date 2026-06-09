@@ -190,8 +190,10 @@ def train_and_evaluate(model, lr, epochs=50, label=""):
     """Train a model and return final accuracy."""
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),
-        # filter() only passes trainable parameters to the optimizer
-        # Without this, Adam would crash on frozen parameters
+        # lambda p: p.requires_grad is a tiny function that checks if a parameter needs training
+        # filter() keeps only items where the lambda returns True
+        # So this says: "only train parameters that are unfrozen"
+        # DBA analogy: like WHERE is_active = true - only process matching items
         lr=lr
     )
     loss_fn = nn.BCELoss()

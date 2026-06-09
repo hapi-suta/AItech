@@ -145,6 +145,9 @@ def execute_tool(name, arguments):
     if name not in TOOL_REGISTRY:
         return json.dumps({"error": f"Unknown tool: {name}"})
     try:
+        # ** (double-star) unpacks a dictionary into named arguments.
+        # If arguments = {"server": "pg-1"}, then **arguments becomes: server="pg-1"
+        # DBA analogy: like expanding a JSONB object into function parameters.
         return TOOL_REGISTRY[name](**arguments)
     except Exception as e:
         return json.dumps({"error": f"Tool failed: {str(e)}"})

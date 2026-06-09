@@ -72,6 +72,15 @@ import time
 
 # --- Pydantic Models (define request/response shapes) ---
 
+# AlertRequest(BaseModel) means AlertRequest inherits from BaseModel.
+# BaseModel (from Pydantic) auto-validates input data - if someone sends
+# the wrong type, it rejects the request before your code runs.
+# DBA analogy: like CHECK constraints on a table - data is validated on INSERT.
+#
+# Field(..., description="...") defines a required field with validation.
+# The ... (Ellipsis) means "required, no default value."
+# Optional[str] means "this field can be a string OR None."
+# DBA analogy: ... = NOT NULL, Optional = nullable column.
 class AlertRequest(BaseModel):
     """What the client sends to us."""
     message: str = Field(..., min_length=1, description="The alert message text")

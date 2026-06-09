@@ -44,6 +44,11 @@ server metrics. Always gather data before making recommendations.
 """)
 
 
+# @mcp.tool() is a "decorator" - it wraps the function below it.
+# The @ symbol means "register this function as an MCP tool."
+# DBA analogy: like creating a trigger. The decorator is the trigger
+# definition, the function is the trigger body.
+# Without the @, it's just a regular function. With @, it becomes a tool.
 @mcp.tool()
 def pg_isready(host: str = "localhost", port: int = 5432) -> str:
     """Check if a PostgreSQL server is accepting connections.

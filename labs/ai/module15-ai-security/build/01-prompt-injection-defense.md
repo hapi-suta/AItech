@@ -74,7 +74,11 @@ class InjectionDetector:
     """Detect prompt injection attempts."""
 
     def __init__(self):
-        # Patterns that suggest injection
+        # These regex patterns detect common prompt injection strings:
+        # r"ignore\s+previous\s+instructions" = match "ignore previous instructions" (instruction override)
+        # r"you\s+are\s+now\s+" = match "you are now..." (role manipulation)
+        # r"<script" = match script tags (XSS attack)
+        # \s+ means "one or more spaces", (a|b) means "a or b", ? means "optional"
         self.injection_patterns = [
             # Direct instruction override
             (r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)", "instruction_override"),

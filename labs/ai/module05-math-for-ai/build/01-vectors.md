@@ -379,7 +379,11 @@ docs = [
 ]
 
 # sorted() puts items in order
-# key=lambda x: x[1] means "sort by the second item" (the score)
+# lambda is a tiny function without a name, written on one line.
+# lambda x: x[1] means "a function that takes x and returns x[1]"
+# It's the same as writing: def get_second(x): return x[1]
+# key=lambda x: x[1] tells sorted() to sort by the second item (the score)
+# DBA analogy: like an inline expression in ORDER BY
 # reverse=True means "highest first"
 results = sorted(
     [(name, cosine_sim(query, vec)) for name, vec in docs],

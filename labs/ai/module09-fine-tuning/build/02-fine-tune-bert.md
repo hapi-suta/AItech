@@ -94,7 +94,11 @@ combined = list(zip(texts, labels))
 random.shuffle(combined)
 # shuffle randomizes the order (important for training)
 texts, labels = zip(*combined)
-# zip(*combined) unpacks back into separate lists
+# zip(*combined) is the REVERSE of zip - it unpacks a list of pairs back into two lists.
+# If combined = [("alert1", 0), ("alert2", 1)], then:
+#   zip(*combined) gives: ("alert1", "alert2"), (0, 1)
+# The * (splat) unpacks the list so each tuple becomes a separate argument to zip.
+# DBA analogy: like UNNEST on an array of composite types - separating back into columns.
 texts = list(texts)
 labels = list(labels)
 
@@ -260,8 +264,11 @@ print()
 split = int(len(texts) * 0.75)
 # 75% train, 25% test
 
+# Dict comprehension: build a new dictionary from an existing one.
+# {k: v[:split] for k, v in encodings.items()}
+# For each key-value pair, keep the key (k) but slice the value (v[:split] = first 75%)
+# DBA analogy: SELECT key, value[1:split] FROM encodings - taking a subset of each column
 train_encodings = {k: v[:split] for k, v in encodings.items()}
-# Dictionary comprehension: slice first 75% of each tensor
 test_encodings = {k: v[split:] for k, v in encodings.items()}
 train_labels = label_tensor[:split]
 test_labels = label_tensor[split:]
