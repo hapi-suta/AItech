@@ -16,6 +16,9 @@ import json
 import time
 import hashlib
 from datetime import datetime
+# Counter counts items: Counter(["a","b","a"]) -> {"a": 2, "b": 1}
+# defaultdict auto-creates missing keys instead of crashing.
+# DBA analogy: Counter = GROUP BY + COUNT. defaultdict = INSERT ON CONFLICT DO UPDATE.
 from collections import Counter, defaultdict
 
 # ============================================================
@@ -50,24 +53,35 @@ class FeatureExtractor:
         }
 
     def extract(self, text, metrics=None):
-        text_lower = text.lower()
+        """
+        Convert raw text and metrics into numbers the classifier can use.
+        This is the same approach from Module 16 - keyword counting for text,
+        min-max normalization for metrics.
+        """
+        text_lower = text.lower()    # lowercase so "CPU" matches "cpu"
         features = {}
 
-        # Text keyword features
+        # Text keyword features: count matching keywords per category
+        # sum(1 for kw in kws if kw in text_lower) = count matches
+        # DBA analogy: SELECT COUNT(*) FROM keywords WHERE keyword IN (alert_words)
         for cat, kws in self.keywords.items():
             matches = sum(1 for kw in kws if kw in text_lower)
-            features[f"text_{cat}"] = matches
+            features[f"text_{cat}"] = matches    # e.g. "text_performance": 3
 
-        # Metric features (scaled 0-1)
+        # Metric features: normalize each metric to 0-1 range
+        # (metrics or {}) means: use metrics if provided, empty dict if None
+        # .get(name) returns the value or None if the metric isn't present
         for name, (min_v, max_v) in self.metric_ranges.items():
-            val = (metrics or {}).get(name)
+            val = (metrics or {}).get(name)       # like COALESCE - safe lookup
             if val is not None:
+                # Min-max scaling: (value - min) / (max - min)
+                # max(0, min(1, ...)) clips the result to 0-1 range
                 scaled = max(0, min(1, (val - min_v) / (max_v - min_v)))
                 features[f"metric_{name}"] = round(scaled, 4)
-                features[f"missing_{name}"] = 0
+                features[f"missing_{name}"] = 0   # metric was present
             else:
                 features[f"metric_{name}"] = 0.0
-                features[f"missing_{name}"] = 1
+                features[f"missing_{name}"] = 1   # metric was missing
 
         return features
 
@@ -94,38 +108,50 @@ class AlertClassifier:
         ]
 
     def classify(self, text, metrics=None):
-        # Text classification
+        """
+        Classify an alert using late fusion (Module 16).
+        Text and metrics each vote separately, then we combine.
+        """
+        # --- Text classification ---
+        # Count keyword matches per category (same as Module 16)
         text_lower = text.lower()
-        text_scores = {}
+        text_scores = {}                     # category -> confidence score
         for cat, kws in self.text_rules.items():
-            score = sum(1 for kw in kws if kw in text_lower)
+            score = sum(1 for kw in kws if kw in text_lower)  # count matches
             if score > 0:
+                # Convert match count to confidence (1 match=0.62, 2=0.74, etc.)
                 text_scores[cat] = min(0.5 + score * 0.12, 0.85)
 
-        # Metric classification
-        metric_scores = {}
+        # --- Metric classification ---
+        # Check if any metric exceeds its threshold
+        metric_scores = {}                   # category -> confidence score
         for name, thresh, cat in self.metric_rules:
+            # (metrics or {}).get(name) = safe lookup, returns None if missing
             val = (metrics or {}).get(name)
             if val is not None and val >= thresh:
+                # How far above threshold? (0.0 = at threshold, 1.0 = double)
                 severity = min((val - thresh) / thresh, 1.0)
                 metric_scores[cat] = min(0.5 + severity * 0.35, 0.9)
 
-        # Late fusion
+        # --- Late fusion: combine text and metric votes ---
+        # set() removes duplicates - get all categories from both models
         all_cats = set(list(text_scores.keys()) + list(metric_scores.keys()))
         combined = {}
         for cat in all_cats:
-            tc = text_scores.get(cat, 0)
-            mc = metric_scores.get(cat, 0)
+            tc = text_scores.get(cat, 0)     # text confidence (0 if no text match)
+            mc = metric_scores.get(cat, 0)   # metric confidence (0 if no metric match)
             if tc > 0 and mc > 0:
+                # Both agree: average + agreement bonus (Module 16 late fusion)
                 combined[cat] = min((tc + mc) / 2 + 0.08, 0.95)
             elif tc > 0:
-                combined[cat] = tc * 0.85
+                combined[cat] = tc * 0.85    # text only: slight penalty
             else:
-                combined[cat] = mc * 0.85
+                combined[cat] = mc * 0.85    # metrics only: slight penalty
 
         if not combined:
-            return "unknown", 0.1, []
+            return "unknown", 0.1, []        # nothing matched at all
 
+        # Pick category with highest combined score
         best = max(combined, key=combined.get)
         evidence = []
         if best in text_scores:
@@ -203,6 +229,9 @@ class DiagnosticsEngine:
         candidates = self.causes.get(category, [])
 
         for cause, keywords in candidates:
+            # any() returns True if ANY item in the list is True.
+            # "any keyword found in the text?" - if yes, this is the cause.
+            # DBA analogy: like WHERE keyword = ANY(ARRAY['lock','blocked','wait'])
             if any(kw in text_lower for kw in keywords):
                 return cause
 
@@ -219,6 +248,10 @@ class OutputFilter:
             "performance", "storage", "replication",
             "security", "connectivity", "backup", "unknown",
         ]
+        # Regex patterns to find and replace sensitive data.
+        # r'\b\d{1,3}...\b' matches IP addresses like 192.168.1.1
+        # r'\bpg-\w+...\b' matches server names like pg-primary-1
+        # Each tuple is (pattern_to_find, replacement_text).
         self.redact_patterns = [
             (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP_REDACTED]'),
             (r'\bpg-\w+[-\w]*\b', '[SERVER_REDACTED]'),
@@ -280,7 +313,10 @@ class DBaBrainClassifier:
 
     def classify(self, text, metrics=None):
         """Full classification pipeline."""
-        start = time.time()
+        start = time.time()                 # record start time for latency tracking
+        # Generate a unique request ID (like a transaction ID in PostgreSQL).
+        # hashlib.md5() creates a hash, .hexdigest() converts to text,
+        # [:8] takes the first 8 characters. Just a short unique identifier.
         request_id = hashlib.md5(f"{time.time()}".encode()).hexdigest()[:8]
 
         # Step 1: Extract features

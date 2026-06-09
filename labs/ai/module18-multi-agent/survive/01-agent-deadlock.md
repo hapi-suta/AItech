@@ -225,6 +225,11 @@ for agent, deps in dependencies.items():
 # DBA analogy: imagine tracing FK relationships. If you follow the chain
 # and arrive back at the table you started from, you have a circular reference.
 
+# Type hints (: dict, -> list) tell you what the function expects and returns.
+# graph: dict means "graph should be a dictionary"
+# -> list means "this function returns a list"
+# They don't change how the code runs - they're just labels for readability.
+# DBA analogy: like column data types. They document what goes where.
 def find_cycle(graph: dict) -> list:
     """
     Walk the dependency graph and return the first cycle found.

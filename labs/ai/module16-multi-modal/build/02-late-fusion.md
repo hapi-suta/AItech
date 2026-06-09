@@ -55,7 +55,11 @@ class TextClassifier:
         scores = {}                      # category -> number of keyword matches
 
         for category, keywords in self.rules.items():
-            # Count how many keywords from this category appear in the text
+            # Count how many keywords from this category appear in the text.
+            # sum(1 for kw in keywords if kw in text_lower) means:
+            #   "for each keyword, add 1 if it appears in the text"
+            # So if 3 out of 6 keywords appear, matches = 3.
+            # DBA analogy: SELECT COUNT(*) FROM keywords WHERE keyword IN (text_words)
             matches = sum(1 for kw in keywords if kw in text_lower)
             if matches > 0:
                 scores[category] = matches
@@ -63,8 +67,12 @@ class TextClassifier:
         if not scores:
             return "unknown", 0.2        # no keywords matched
 
-        # Pick the category with the most keyword matches
-        best_category = max(scores, key=scores.get)  # category with highest score
+        # Pick the category with the most keyword matches.
+        # max(scores, key=scores.get) finds the key with the highest value.
+        # scores.get is passed WITHOUT () - we're giving max() the function
+        # itself, and max() calls it on each key to compare them.
+        # DBA analogy: SELECT category FROM scores ORDER BY count DESC LIMIT 1
+        best_category = max(scores, key=scores.get)
         best_score = scores[best_category]
 
         # Convert match count to confidence (0-1)
@@ -88,7 +96,12 @@ test_texts = [
 print("\nText Model Predictions:")
 print("-" * 50)
 for text in test_texts:
+    # Tuple unpacking: predict() returns TWO values (category, confidence).
+    # This line catches both at once, like: SELECT cat, conf INTO var1, var2
     category, confidence = text_model.predict(text)
+    # Format specifiers in f-strings:
+    #   {confidence:.0%} = show as percentage with 0 decimal places (0.85 -> "85%")
+    #   {category:<15s}  = left-align text, padded to 15 characters wide
     print(f"  [{confidence:.0%}] {category:<15s} <- '{text}'")
 
 PYEOF
@@ -191,6 +204,10 @@ labels = [
 
 print("\nMetric Model Predictions:")
 print("-" * 50)
+# zip() pairs up items from two lists by position:
+#   zip([metrics1, metrics2], [label1, label2])
+#   gives: (metrics1, label1), (metrics2, label2)
+# DBA analogy: like joining two arrays by index position.
 for metrics, label in zip(test_metrics, labels):
     category, confidence = metric_model.predict(metrics)
     print(f"  [{confidence:.0%}] {category:<15s} <- {label}")

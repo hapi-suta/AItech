@@ -358,12 +358,16 @@ class AccuracyTrendMonitor:
         x_values = list(range(window))
         y_values = [w["accuracy"] for w in recent]
 
-        # Calculate slope using least squares
-        n = len(x_values)
-        sum_x = sum(x_values)
-        sum_y = sum(y_values)
+        # Calculate slope using least squares (a math formula to find the trend line).
+        # You don't need to memorize this formula - just know it finds the
+        # "best fit line" through the data points, like a trend line in Excel.
+        n = len(x_values)                    # how many data points
+        sum_x = sum(x_values)                # add up all x values
+        sum_y = sum(y_values)                # add up all y values
+        # zip(x_values, y_values) pairs them: (0, 0.92), (1, 0.89), (2, 0.82)...
+        # Then we multiply each pair (x * y) and add them all up.
         sum_xy = sum(x * y for x, y in zip(x_values, y_values))
-        sum_x2 = sum(x * x for x in x_values)
+        sum_x2 = sum(x * x for x in x_values)  # sum of x-squared values
 
         denominator = n * sum_x2 - sum_x * sum_x
         if denominator == 0:

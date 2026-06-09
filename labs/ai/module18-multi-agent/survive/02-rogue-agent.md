@@ -438,6 +438,13 @@ class SafeRemediationAgent:
 # TEST: try to start in three different scenarios
 # -----------------------------------------------------------------------
 
+# try/except: run code that MIGHT fail, and handle the failure gracefully.
+#   try: runs the code inside
+#   except ValueError as e: if that specific error happens, catch it
+#   "as e" saves the error message in a variable called e
+# DBA analogy: like BEGIN ... EXCEPTION WHEN ... in PL/pgSQL.
+# Without try/except, the error would crash the entire program.
+# With it, we catch the error and handle it (print a message, continue).
 print("\nScenario 1: Safe config in production")
 try:
     agent = SafeRemediationAgent(
@@ -661,6 +668,11 @@ class KillSwitch:
         self._engaged.clear()
         print(f"  KILL SWITCH CLEARED by {cleared_by}")
 
+    # @property makes this method act like a variable.
+    # Instead of calling kill_switch.is_active(), you use kill_switch.is_active
+    # (no parentheses). It's just a shortcut for cleaner code.
+    # "-> bool" is a type hint: tells readers this returns True or False.
+    # DBA analogy: like a VIEW - looks like a table, but runs a query behind the scenes.
     @property
     def is_active(self) -> bool:
         """Returns True if the kill switch is currently engaged."""

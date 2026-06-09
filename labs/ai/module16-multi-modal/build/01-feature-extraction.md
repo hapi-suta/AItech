@@ -4,6 +4,93 @@ Before you can combine text and metrics, you need to convert each into a consist
 
 ---
 
+## Python patterns used in this module
+
+This module uses some Python patterns you'll see repeatedly. Here's a quick reference so you're not lost when they appear.
+
+```
+# --- f-strings ---
+# f-strings let you put variables INSIDE a string.
+# The f before the quotes means "format this string."
+# Anything inside {} gets replaced with its value.
+name = "postgres"
+print(f"Database: {name}")     # prints: Database: postgres
+# DBA analogy: like format() in PL/pgSQL or printf in bash.
+
+# --- List comprehension ---
+# A shortcut to build a list from a loop. Instead of:
+#   result = []
+#   for x in items:
+#       if x > 5:
+#           result.append(x)
+# You write:
+#   result = [x for x in items if x > 5]
+# Read it as: "give me x, for each x in items, but only if x > 5"
+# DBA analogy: like SELECT x FROM items WHERE x > 5.
+
+# --- Dict comprehension ---
+# Same idea but builds a dictionary instead of a list:
+#   {key: value for key, value in items.items() if value > 0}
+# Read it as: "give me key:value pairs, for each pair, if value > 0"
+# DBA analogy: like SELECT key, value FROM items WHERE value > 0
+#              but the result is a lookup table (dict).
+
+# --- sum() with a generator ---
+# sum(1 for x in items if x > 5)
+# This COUNTS how many items match a condition.
+# Read it as: "add 1 for each x in items where x > 5"
+# DBA analogy: SELECT COUNT(*) FROM items WHERE x > 5.
+
+# --- .get(key, default) ---
+# Safe dictionary lookup. Returns the default if key doesn't exist.
+# d.get("missing_key", 0) returns 0 instead of crashing.
+# DBA analogy: like COALESCE(column, 0) in SQL.
+
+# --- max(dict, key=dict.get) ---
+# Find the dictionary key with the highest value.
+# max({"a": 3, "b": 7, "c": 1}, key=scores.get) returns "b"
+# DBA analogy: SELECT key FROM scores ORDER BY value DESC LIMIT 1.
+
+# --- lambda ---
+# A tiny one-line function without a name.
+# lambda x: x[1] means "a function that takes x and returns x[1]"
+# Used with sorted() or max() to tell them WHAT to sort/compare by.
+# DBA analogy: like ORDER BY in SQL - you're telling it which column.
+
+# --- zip() ---
+# Pairs up items from two lists, like walking two lists side by side.
+# zip([1, 2, 3], ["a", "b", "c"]) gives pairs: (1,"a"), (2,"b"), (3,"c")
+# DBA analogy: like joining two arrays by position.
+
+# --- enumerate() ---
+# Gives you both the index AND the item when looping.
+# for i, item in enumerate(["a", "b", "c"]):
+#   prints: 0 a, 1 b, 2 c
+# DBA analogy: like ROW_NUMBER() OVER() in a SELECT.
+
+# --- tuple unpacking ---
+# When a function returns two values, you can catch both:
+# category, confidence = classify(text)
+# This puts the first return value in 'category' and second in 'confidence'.
+# DBA analogy: like SELECT col1, col2 INTO var1, var2.
+
+# --- set() ---
+# A collection with NO duplicates. Adding "cpu" twice still gives one "cpu".
+# DBA analogy: like SELECT DISTINCT.
+
+# --- try/except ---
+# Run code that might fail, and handle the failure gracefully.
+# try:
+#     risky_thing()
+# except SomeError as e:
+#     print(f"Failed: {e}")
+# DBA analogy: like BEGIN ... EXCEPTION WHEN ... in PL/pgSQL.
+```
+
+You don't need to memorize these now. Come back to this reference when you see a pattern you don't recognize.
+
+---
+
 ## Step 1. Text feature extraction
 
 On your **Mac terminal**, run:
@@ -69,7 +156,13 @@ print("\nMethod 1: Keyword Features")
 print("-" * 50)
 for text in test_texts:
     features = extract_keyword_features(text)
-    # Only show features that are 1 (present)
+    # List comprehension: build a list of keyword names where the value is 1.
+    # [k for k, v in features.items() if v == 1]
+    #  ^           ^                     ^
+    #  |           |                     +-- only include if value is 1
+    #  |           +-- loop through each key-value pair
+    #  +-- keep just the key (keyword name)
+    # DBA analogy: SELECT key FROM features WHERE value = 1
     present = [k for k, v in features.items() if v == 1]
     print(f"  '{text[:40]}...'")
     print(f"    Keywords found: {present}")
@@ -93,12 +186,17 @@ def extract_bow_features(text, vocabulary=None):
     word_counts = Counter(words)        # Counter({'cpu': 1, 'at': 1, '95': 1, ...})
 
     if vocabulary:
-        # Only count words we know about (from training data)
+        # Dict comprehension: build a dictionary of {word: count} for known words.
+        # .get(word, 0) returns 0 if the word wasn't found (like COALESCE in SQL).
+        # DBA analogy: SELECT word, COALESCE(count, 0) FROM vocabulary LEFT JOIN word_counts
         return {word: word_counts.get(word, 0) for word in vocabulary}
     return dict(word_counts)
 
 # Build a vocabulary from all our texts
-all_words = set()                       # set = no duplicates
+# set() creates a collection that automatically removes duplicates.
+# If you add "cpu" twice, the set still only has one "cpu".
+# DBA analogy: like SELECT DISTINCT - no repeated values.
+all_words = set()
 for text in test_texts:
     words = re.findall(r'[a-z0-9]+', text.lower())
     all_words.update(words)             # add all words to the set
@@ -111,6 +209,8 @@ print("-" * 50)
 print(f"  Vocabulary (first 15): {vocabulary}")
 for text in test_texts[:2]:             # show first 2 examples
     features = extract_bow_features(text, vocabulary)
+    # Dict comprehension: keep only entries where count > 0
+    # DBA analogy: SELECT key, value FROM features WHERE value > 0
     nonzero = {k: v for k, v in features.items() if v > 0}
     print(f"  '{text[:40]}...'")
     print(f"    Word counts: {nonzero}")
@@ -163,9 +263,17 @@ print("Method 3: TF-IDF Features")
 print("-" * 50)
 tfidf_results = compute_tfidf(test_texts, vocabulary[:10])
 
+# enumerate() gives you both the position number AND the item.
+# So i=0, text="first alert" then i=1, text="second alert"
+# DBA analogy: like ROW_NUMBER() OVER() - adds a counter to each row.
+# [:2] means "take only the first 2 items" (like LIMIT 2 in SQL).
 for i, text in enumerate(test_texts[:2]):
     scores = tfidf_results[i]
-    # Show top 5 words by TF-IDF score
+    # sorted() with key=lambda x: x[1] means "sort by the second element"
+    # lambda x: x[1] is a tiny function: given x (a pair like ("word", 0.5)),
+    # return x[1] (the number 0.5). So we're sorting by score.
+    # reverse=True means highest first. [:5] means keep top 5.
+    # DBA analogy: ORDER BY score DESC LIMIT 5
     top_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
     print(f"  '{text[:40]}...'")
     print(f"    Top TF-IDF words: {top_words}")
