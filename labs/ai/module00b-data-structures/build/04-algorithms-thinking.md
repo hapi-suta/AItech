@@ -102,7 +102,7 @@ print(f'Linear search would check up to {len(big_list):,} items')
 
 Expected output (yours will differ):
 ```
-Found "reporting" at index 3 in 2 steps
+Found "reporting" at index 3 in 3 steps
 Linear search would check up to 6 items
 Found 873291 in list of 1,000,000 items using 20 steps
 Linear search would check up to 1,000,000 items
@@ -513,22 +513,22 @@ Expected output (yours will differ):
 === Query Type Summary ===
 Type        Count     Total ms     Avg ms
 ----------------------------------------
-SELECT          7      22524.1     3217.7
+SELECT          7      22430.2     3204.3
 INSERT          1        123.5      123.5
-UPDATE          1         67.9       67.9
 DELETE          1         89.0       89.0
+UPDATE          1         67.9       67.9
 
 === Top 3 Slowest Queries ===
 1. [8,234.6 ms] SELECT * FROM orders WHERE created_at > 2024-01-01
 2. [5,678.9 ms] SELECT count(*) FROM orders GROUP BY status
-3. [4,567.9 ms] SELECT * FROM orders JOIN customers ON orders.customer_
+3. [4,567.9 ms] SELECT * FROM orders JOIN customers ON orders.customer_id =
 
 === Most Queried Tables ===
   orders               5 queries
-  users                2 queries
+  unknown              2 queries
+  users                1 queries
   audit_log            1 queries
   sessions             1 queries
-  1                    1 queries
 ```
 
 This example uses nearly everything from BUILD 01-04: lists, dicts, string operations, sorting, comprehensions, counting patterns, and formatted output.

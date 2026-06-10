@@ -54,6 +54,8 @@ docker run -d \
   grafana/grafana:latest
 ```
 
+**Note:** If port 3000 is already in use by another application (like a Next.js dev server), either stop that application first or use an alternate port. For Docker, change `-p 3000:3000` to `-p 3001:3000` and access Grafana at `http://localhost:3001`. For Homebrew, edit the Grafana config at `/opt/homebrew/etc/grafana/grafana.ini` and change `http_port = 3000` to another port.
+
 Verify Grafana is running by opening your browser to: [http://localhost:3000](http://localhost:3000)
 
 **Default login:**

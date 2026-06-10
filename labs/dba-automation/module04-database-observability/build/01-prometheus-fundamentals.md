@@ -81,12 +81,14 @@ prometheus --version
 
 Expected output (yours will differ):
 ```
-prometheus, version 2.53.0 (branch: HEAD, revision: ...)
+prometheus, version 3.x.x (branch: HEAD, revision: ...)
   build user:       ...
   build date:       ...
-  go version:       go1.22.4
+  go version:       ...
   platform:         darwin/arm64
 ```
+
+**Note:** Prometheus 3.x is current as of 2026. If you see version 2.x, that is fine - all commands in this lab work with both versions.
 
 **Option B: Docker**
 

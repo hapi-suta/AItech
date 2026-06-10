@@ -216,55 +216,27 @@ psql -h "$RESTORED_ENDPOINT" -U labadmin -d labdb -c "SELECT count(*) FROM emplo
 
 ---
 
-## Step 5: Aurora Backtrack
+## Step 5: Aurora Backtrack (MySQL Only - Not Available for PostgreSQL)
 
-**This feature is unique to Aurora and has no self-managed equivalent.** Backtrack lets you "rewind" your database to a previous point in time without creating a new instance. It is like pressing "undo" on your database.
+**Important:** Aurora Backtrack is only available for **Aurora MySQL**, not Aurora PostgreSQL. We include it here so you know it exists (you may encounter it in job interviews or mixed-engine environments), but you cannot use it with Aurora PostgreSQL.
 
-**How it works:**
+**What Backtrack does (Aurora MySQL only):**
 
+- Lets you "rewind" your database to a previous point in time without creating a new instance
 - Aurora continuously saves change records
 - You specify a backtrack window (up to 72 hours)
-- When you backtrack, Aurora reverses changes back to the target time
 - The operation takes seconds to minutes, not the hours a restore takes
-
-**Enable Backtrack when creating an Aurora cluster:**
-
-```bash
-aws rds create-db-cluster \
-  --db-cluster-identifier lab-aurora-backtrack \
-  --engine aurora-postgresql \
-  --engine-version 16.4 \
-  --master-username labadmin \
-  --master-user-password 'ChangeMe2024!Secure' \
-  --db-subnet-group-name lab-subnet-group \
-  --vpc-security-group-ids "$SG_ID" \
-  --backtrack-window 3600
-```
-
-**Note:** `--backtrack-window 3600` means you can backtrack up to 1 hour (3600 seconds).
-
-**Backtrack a cluster:**
-
-```bash
-aws rds backtrack-db-cluster \
-  --db-cluster-identifier lab-aurora-backtrack \
-  --backtrack-to "2026-06-09T15:00:00Z"
-```
 
 **Backtrack vs PITR:**
 
-| Feature | PITR (RDS and Aurora) | Backtrack (Aurora only) |
+| Feature | PITR (RDS and Aurora PostgreSQL) | Backtrack (Aurora MySQL only) |
 |---|---|---|
 | Creates new instance | Yes | No - modifies in-place |
 | Time to complete | 30-60 minutes | Seconds to minutes |
 | Maximum window | Up to 35 days | Up to 72 hours |
-| Cost | New instance + storage | Per change record stored |
-| Use case | Disaster recovery | Quick undo of bad changes |
+| PostgreSQL support | Yes | **No** |
 
-**When to use Backtrack:**
-- Someone ran `DELETE FROM users` without a WHERE clause 10 minutes ago
-- A migration script went wrong and you need to undo it quickly
-- Testing "what if" scenarios in a development environment
+**For Aurora PostgreSQL, use PITR** (covered in Step 4 above). PITR creates a new cluster from a point-in-time, which takes longer but is the correct approach for PostgreSQL on Aurora
 
 ---
 

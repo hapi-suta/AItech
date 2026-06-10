@@ -385,7 +385,7 @@ Expected output (yours will differ):
 10
 10
 Sorted: [50, 256, 1024, 8192]
-Sorted by last digit: [50, 1024, 256, 8192]
+Sorted by last digit: [50, 8192, 1024, 256]
 ```
 
 **Keep lambdas simple.** If your lambda is hard to read, write a regular function instead.

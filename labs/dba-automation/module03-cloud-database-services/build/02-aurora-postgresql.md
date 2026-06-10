@@ -372,7 +372,7 @@ Use this decision framework:
 - Your storage needs are unpredictable (auto-grows)
 - You need cross-region replication (Global Database)
 - You want Performance Insights and Enhanced Monitoring without extra setup
-- You need the Backtrack feature (rewind without restore)
+- You want automatic storage scaling and pay-per-use I/O (Aurora I/O-Optimized)
 
 ---
 

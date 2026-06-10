@@ -121,7 +121,7 @@ if not is_replica:
     print('This is a primary server')
 
 # Combined - just like a complex WHERE clause
-if (connections / max_connections * 100) > 75 and not is_replica:
+if (connections / max_connections * 100) >= 75 and not is_replica:
     print('Primary server connection pool over 75%')
 "
 ```

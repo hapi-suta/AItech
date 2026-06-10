@@ -72,15 +72,30 @@ from contextlib import closing
 
 with closing(psycopg2.connect(dbname='postgres', user='postgres')) as conn:
     with conn.cursor() as cur:
-        cur.execute('''
-            SELECT checkpoints_timed,
-                   checkpoints_req,
-                   buffers_checkpoint,
-                   buffers_clean,
-                   buffers_backend,
-                   stats_reset
-            FROM pg_stat_bgwriter
-        ''')
+        # PostgreSQL 17+ moved checkpoint columns to pg_stat_checkpointer
+        cur.execute('SHOW server_version_num')
+        pg_version = int(cur.fetchone()[0])
+
+        if pg_version >= 170000:
+            cur.execute('''
+                SELECT c.num_timed as checkpoints_timed,
+                       c.num_requested as checkpoints_req,
+                       c.buffers_written as buffers_checkpoint,
+                       b.buffers_clean,
+                       b.buffers_alloc as buffers_backend,
+                       b.stats_reset
+                FROM pg_stat_checkpointer c, pg_stat_bgwriter b
+            ''')
+        else:
+            cur.execute('''
+                SELECT checkpoints_timed,
+                       checkpoints_req,
+                       buffers_checkpoint,
+                       buffers_clean,
+                       buffers_backend,
+                       stats_reset
+                FROM pg_stat_bgwriter
+            ''')
         row = cur.fetchone()
         timed, req, buf_ckpt, buf_clean, buf_backend, reset = row
 
@@ -436,9 +451,9 @@ output_file = '/tmp/db_metrics.csv'
 with closing(psycopg2.connect(dbname='postgres', user='postgres')) as conn:
     with conn.cursor() as cur:
         cur.execute('''
-            SELECT datname,
-                   pg_database_size(datname) as size_bytes,
-                   numbackends
+            SELECT d.datname,
+                   pg_database_size(d.datname) as size_bytes,
+                   sd.numbackends
             FROM pg_database d
             JOIN pg_stat_database sd ON d.oid = sd.datid
             WHERE d.datistemplate = false
@@ -627,7 +642,7 @@ def collect_database_stats(cur) -> dict:
     row = cur.fetchone()
     commits, rollbacks, returned, fetched, inserted, updated, deleted, read, hit = row
 
-    cache_hit = round(100.0 * hit / (hit + read), 2) if (hit + read) > 0 else 0
+    cache_hit = round(100.0 * float(hit) / float(hit + read), 2) if (hit + read) > 0 else 0
 
     return {
         'txn_commits': commits or 0,
@@ -645,14 +660,28 @@ def collect_database_stats(cur) -> dict:
 
 def collect_bgwriter_stats(cur) -> dict:
     """Snapshot bgwriter/checkpointer statistics."""
-    cur.execute('''
-        SELECT checkpoints_timed,
-               checkpoints_req,
-               buffers_checkpoint,
-               buffers_clean,
-               buffers_backend
-        FROM pg_stat_bgwriter
-    ''')
+    # PostgreSQL 17+ moved checkpoint columns to pg_stat_checkpointer
+    cur.execute('SHOW server_version_num')
+    pg_version = int(cur.fetchone()[0])
+
+    if pg_version >= 170000:
+        cur.execute('''
+            SELECT c.num_timed as checkpoints_timed,
+                   c.num_requested as checkpoints_req,
+                   c.buffers_written as buffers_checkpoint,
+                   b.buffers_clean,
+                   b.buffers_alloc as buffers_backend
+            FROM pg_stat_checkpointer c, pg_stat_bgwriter b
+        ''')
+    else:
+        cur.execute('''
+            SELECT checkpoints_timed,
+                   checkpoints_req,
+                   buffers_checkpoint,
+                   buffers_clean,
+                   buffers_backend
+            FROM pg_stat_bgwriter
+        ''')
     timed, req, buf_ckpt, buf_clean, buf_backend = cur.fetchone()
 
     return {

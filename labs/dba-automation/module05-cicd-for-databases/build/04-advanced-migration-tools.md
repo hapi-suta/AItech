@@ -416,8 +416,11 @@ Atlas can compare two schemas and generate the migration DDL:
 ```bash
 atlas schema diff \
   --from "postgres://postgres:postgres@localhost:5432/atlas_lab?sslmode=disable" \
-  --to "file://schema.hcl"
+  --to "file://schema.hcl" \
+  --dev-url "postgres://postgres:postgres@localhost:5432/atlas_dev?sslmode=disable"
 ```
+
+**Note:** Atlas requires a `--dev-url` pointing to a clean, empty database it can use for planning. Create one first: `createdb atlas_dev`. The `--dev-url` database must be different from the `--from` database.
 
 If the database matches the schema file, there is no diff. If you modify the HCL file (say, add a column), Atlas generates the ALTER TABLE statement.
 

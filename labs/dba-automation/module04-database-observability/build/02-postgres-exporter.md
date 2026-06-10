@@ -66,8 +66,10 @@ postgres_exporter needs a PostgreSQL connection string. Create a dedicated monit
 **On your Mac, connect to your local PostgreSQL:**
 
 ```bash
-psql -U postgres
+psql -d postgres
 ```
+
+**Note:** On Homebrew-installed PostgreSQL, there may not be a `postgres` role. Use `psql -d postgres` (which connects as your OS user) or `psql -U postgres` if you have a `postgres` role configured.
 
 Create a monitoring user with minimal privileges:
 
@@ -319,6 +321,10 @@ pg_stat_user_tables:
         description: "Last time autoanalyze ran on this table"
 
 pg_stat_statements_top:
+  # NOTE: This query requires pg_stat_statements extension.
+  # Enable it first: ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+  # Then restart PostgreSQL and run: CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+  # If pg_stat_statements is not loaded, this query will error - remove this block if not using it.
   query: |
     SELECT
       queryid,

@@ -248,11 +248,11 @@ vi playbook-hello.yml
   tasks:
     - name: Print a greeting
       debug:
-        msg: "Hello from Ansible! Running on {{ ansible_hostname }}"
+        msg: "Hello from Ansible! Running on {{ ansible_facts['hostname'] }}"
 
     - name: Show operating system
       debug:
-        msg: "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+        msg: "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
 
     - name: Check if PostgreSQL is installed
       command: which psql
@@ -383,14 +383,16 @@ When `gather_facts: true`, Ansible collects system information automatically:
 - name: Show useful facts
   debug:
     msg: |
-      Hostname: {{ ansible_hostname }}
-      OS: {{ ansible_distribution }}
-      CPUs: {{ ansible_processor_vcpus }}
-      Memory MB: {{ ansible_memtotal_mb }}
-      IP: {{ ansible_default_ipv4.address }}
+      Hostname: {{ ansible_facts['hostname'] }}
+      OS: {{ ansible_facts['distribution'] }}
+      CPUs: {{ ansible_facts['processor_vcpus'] }}
+      Memory MB: {{ ansible_facts['memtotal_mb'] }}
+      IP: {{ ansible_facts['default_ipv4']['address'] }}
 ```
 
-**DBA Analogy:** Facts are like `pg_settings` - system properties you can reference in your configuration. Just as you might set `shared_buffers` based on available RAM, you can use `ansible_memtotal_mb` to calculate PostgreSQL memory parameters dynamically.
+**DBA Analogy:** Facts are like `pg_settings` - system properties you can reference in your configuration. Just as you might set `shared_buffers` based on available RAM, you can use `ansible_facts['memtotal_mb']` to calculate PostgreSQL memory parameters dynamically.
+
+**Note:** Older Ansible examples use `ansible_hostname`, `ansible_distribution`, etc. as top-level variables. As of ansible-core 2.21+, use `ansible_facts['hostname']`, `ansible_facts['distribution']`, etc. instead. The old syntax is deprecated and will stop working in ansible-core 2.24.
 
 ### Custom Variables
 

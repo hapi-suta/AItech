@@ -657,10 +657,11 @@ Verify the files are gone:
 ls *.txt
 ```
 
-Expected output:
+Expected output (exact message varies by shell):
 
 ```
-ls: *.txt: No such file or directory
+ls: *.txt: No such file or directory       # bash
+(eval):1: no matches found: *.txt          # zsh (macOS default)
 ```
 
 Clean and predictable. Every resource Terraform created, Terraform removed.

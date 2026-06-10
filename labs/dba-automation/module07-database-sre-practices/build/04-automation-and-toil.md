@@ -133,7 +133,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("/var/log/pg-user-provisioning.log"),
+        logging.FileHandler(os.path.expanduser("~/pg-user-provisioning.log")),
     ],
 )
 logger = logging.getLogger(__name__)

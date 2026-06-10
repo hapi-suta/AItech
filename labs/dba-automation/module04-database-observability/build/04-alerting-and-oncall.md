@@ -203,8 +203,28 @@ Prometheus detects problems. Alertmanager decides who to notify and how. It hand
 
 **Install Alertmanager:**
 
+**Option A: Docker (recommended - no Homebrew formula exists for Alertmanager)**
+
 ```bash
-brew install alertmanager
+docker run -d \
+  --name alertmanager \
+  -p 9093:9093 \
+  -v ~/lab-prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  prom/alertmanager:latest
+```
+
+**Option B: Binary download**
+
+```bash
+# Download latest release (check https://prometheus.io/download/ for current version)
+curl -LO https://github.com/prometheus/alertmanager/releases/download/v0.28.1/alertmanager-0.28.1.darwin-arm64.tar.gz
+
+# Extract and install
+tar xzf alertmanager-0.28.1.darwin-arm64.tar.gz
+sudo mv alertmanager-0.28.1.darwin-arm64/alertmanager /usr/local/bin/
+
+# Verify
+alertmanager --version
 ```
 
 **Configure Alertmanager:**

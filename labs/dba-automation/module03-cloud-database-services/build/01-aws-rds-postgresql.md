@@ -221,16 +221,13 @@ aws rds modify-db-instance \
 
 In self-managed PostgreSQL, you install extensions by placing shared libraries in the `lib` directory and running `CREATE EXTENSION`. In RDS, extensions are pre-installed but you still need to `CREATE EXTENSION` for them.
 
-List available extensions:
+List available extensions by connecting to your RDS instance with psql and running:
 
-```bash
-aws rds describe-db-engine-versions \
-  --engine postgres \
-  --engine-version 16.4 \
-  --query "DBEngineVersions[0].SupportedFeatureNames"
+```sql
+SELECT name, default_version, comment FROM pg_available_extensions ORDER BY name;
 ```
 
-You enable extensions in the database itself with `CREATE EXTENSION`, not through the AWS CLI. We will do that after connecting in the next step.
+You enable extensions in the database with `CREATE EXTENSION`, not through the AWS CLI. We will do that after connecting in the next step.
 
 **Important for DBAs:** Not all extensions are available in RDS. Notable ones that are NOT available:
 - `pg_cron` (not in standard RDS - available in Aurora)

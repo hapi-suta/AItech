@@ -76,7 +76,9 @@ done
 **Measurement:** Track query response times at percentiles:
 
 ```sql
--- If pg_stat_statements is installed
+-- Requires pg_stat_statements extension. Enable it first:
+-- ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+-- Then restart PostgreSQL and run: CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 SELECT
     round(mean_exec_time::numeric, 2) AS avg_ms,
     round(min_exec_time::numeric, 2) AS min_ms,
@@ -425,8 +427,8 @@ fi
 SELECT
     datname,
     round(
-        (blk_read_time + blk_write_time) /
-        NULLIF(xact_commit + xact_rollback, 0),
+        ((blk_read_time + blk_write_time) /
+        NULLIF(xact_commit + xact_rollback, 0))::numeric,
         2
     ) AS avg_io_time_per_txn_ms
 FROM pg_stat_database

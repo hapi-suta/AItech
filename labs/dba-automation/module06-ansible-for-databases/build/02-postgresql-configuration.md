@@ -71,8 +71,8 @@ vi templates/postgresql.conf.j2
 ```ini
 # PostgreSQL {{ pg_version }} Configuration
 # Managed by Ansible - DO NOT EDIT MANUALLY
-# Last deployed: {{ ansible_date_time.iso8601 }}
-# Target host: {{ ansible_hostname }}
+# Last deployed: {{ ansible_facts['date_time']['iso8601'] }}
+# Target host: {{ ansible_facts['hostname'] }}
 
 # ---- Connection Settings ----
 listen_addresses = '{{ pg_listen_addresses | default("*") }}'
@@ -81,13 +81,13 @@ max_connections = {{ pg_max_connections | default(200) }}
 
 # ---- Memory Settings ----
 # shared_buffers: 25% of total RAM
-shared_buffers = '{{ pg_shared_buffers | default((ansible_memtotal_mb * 0.25) | int | string + "MB") }}'
+shared_buffers = '{{ pg_shared_buffers | default((ansible_facts['memtotal_mb'] * 0.25) | int | string + "MB") }}'
 
 # effective_cache_size: 75% of total RAM
-effective_cache_size = '{{ pg_effective_cache_size | default((ansible_memtotal_mb * 0.75) | int | string + "MB") }}'
+effective_cache_size = '{{ pg_effective_cache_size | default((ansible_facts['memtotal_mb'] * 0.75) | int | string + "MB") }}'
 
 # work_mem: total RAM / max_connections / 4
-work_mem = '{{ pg_work_mem | default(((ansible_memtotal_mb / pg_max_connections | default(200)) / 4) | int | string + "MB") }}'
+work_mem = '{{ pg_work_mem | default(((ansible_facts['memtotal_mb'] / pg_max_connections | default(200)) / 4) | int | string + "MB") }}'
 
 maintenance_work_mem = '{{ pg_maintenance_work_mem | default("256MB") }}'
 
@@ -139,7 +139,7 @@ autovacuum_vacuum_scale_factor = {{ pg_autovacuum_vacuum_scale_factor | default(
 |---------|--------|-------------|
 | Variable substitution | `{{ pg_port }}` | Inserts the variable value |
 | Default values | `{{ pg_port \| default(5432) }}` | Uses 5432 if pg_port is not defined |
-| Math expressions | `{{ (ansible_memtotal_mb * 0.25) \| int }}` | Calculates 25% of RAM |
+| Math expressions | `{{ (ansible_facts['memtotal_mb'] * 0.25) \| int }}` | Calculates 25% of RAM |
 | Conditionals | `{% if pg_role == "standby" %}` | Includes block only if condition is true |
 | Comments | `{# This is a Jinja2 comment #}` | Not included in output |
 
@@ -154,7 +154,7 @@ vi templates/pg_hba.conf.j2
 ```ini
 # PostgreSQL Client Authentication Configuration
 # Managed by Ansible - DO NOT EDIT MANUALLY
-# Last deployed: {{ ansible_date_time.iso8601 }}
+# Last deployed: {{ ansible_facts['date_time']['iso8601'] }}
 
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 
